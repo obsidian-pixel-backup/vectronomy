@@ -1,0 +1,157 @@
+import paper from 'paper';
+
+/**
+ * PathEngine uses Paper.js to perform geometric operations.
+ * It's responsible for the "Healing" process: uniting exploded vector segments.
+ */
+
+export class PathEngine {
+  /**
+   * Heal a set of paths by uniting matching proximity segments.
+   * This is a simplified simulation of the AI-guided geometry healing.
+   */
+  static async healExplodedPaths(svgContent: string): Promise<string> {
+    const canvas = document.createElement('canvas');
+    paper.setup(canvas);
+
+    const item = paper.project.importSVG(svgContent);
+    
+    // Flatten the hierarchy to find all path objects
+    const allPaths: paper.PathItem[] = [];
+    const findPaths = (node: paper.Item) => {
+      if (node instanceof paper.Path || node instanceof paper.CompoundPath) {
+        allPaths.push(node);
+      } else if (node.children) {
+        node.children.forEach(findPaths);
+      }
+    };
+    findPaths(item);
+ 
+    // Group paths by stroke and fill to avoid cross-color/cross-operation uniting
+    const colorGroups: Record<string, paper.PathItem[]> = {};
+    allPaths.forEach(p => {
+      const s = p.strokeColor?.toCSS(true) || 'none';
+      const f = p.fillColor?.toCSS(true) || 'none';
+      const key = `${s}|${f}`;
+      if (!colorGroups[key]) colorGroups[key] = [];
+      colorGroups[key].push(p);
+    });
+ 
+    // Proximity tolerance (mm normalized to 96DPI)
+    // Increased to 0.1mm for better joining of imperfect exports
+    const tolerance = 0.1 * (96 / 25.4); 
+ 
+    for (const color in colorGroups) {
+      const paths = colorGroups[color];
+      let i = 0;
+      
+      while (i < paths.length) {
+        const p1 = paths[i];
+        if (!p1 || !(p1 instanceof paper.Path) || p1.closed || p1.segments.length === 0) {
+          i++;
+          continue;
+        }
+
+        let joinedAnyInThisPass = false;
+        for (let j = i + 1; j < paths.length; j++) {
+          const p2 = paths[j];
+          if (!p2 || !(p2 instanceof paper.Path) || p2.closed || p2.segments.length === 0) continue;
+
+          // Proximity endpoints: F=First, L=Last
+          const d_L1_F2 = p1.lastSegment.point.getDistance(p2.firstSegment.point); // Normal: P1-Tail to P2-Head
+          const d_F1_L2 = p1.firstSegment.point.getDistance(p2.lastSegment.point); // Reverse normal: P2-Tail to P1-Head
+          const d_F1_F2 = p1.firstSegment.point.getDistance(p2.firstSegment.point); // Head to Head
+          const d_L1_L2 = p1.lastSegment.point.getDistance(p2.lastSegment.point);   // Tail to Tail
+
+          if (d_L1_F2 < tolerance) {
+            p1.join(p2);
+            paths.splice(j, 1);
+            joinedAnyInThisPass = true;
+            break;
+          } else if (d_F1_L2 < tolerance) {
+            p2.join(p1);
+            paths[i] = p2;
+            paths.splice(j, 1);
+            joinedAnyInThisPass = true;
+            break;
+          } else if (d_F1_F2 < tolerance) {
+            p1.reverse();
+            p1.join(p2);
+            paths.splice(j, 1);
+            joinedAnyInThisPass = true;
+            break;
+          } else if (d_L1_L2 < tolerance) {
+            p2.reverse();
+            p1.join(p2);
+            paths.splice(j, 1);
+            joinedAnyInThisPass = true;
+            break;
+          }
+        }
+
+        if (!joinedAnyInThisPass) {
+          // Check if it can be closed
+          if (p1.segments.length > 1 && p1.firstSegment.point.getDistance(p1.lastSegment.point) < tolerance) {
+            p1.closed = true;
+          }
+          p1.simplify(0.1); // Small simplification to clean up joined nodes
+          i++;
+        }
+      }
+
+      // SECOND PASS: Unite overlapping closed paths of the same color
+      // This handles "Boolean Union" mentioned in the requirement
+      let j = 0;
+      while (j < paths.length) {
+        const p1 = paths[j];
+        if (!p1) { j++; continue; }
+        
+        // Only unite shapes that are effectively closed
+        const isP1Closed = (p1 instanceof paper.Path && p1.closed) || (p1 instanceof paper.CompoundPath);
+        if (!isP1Closed) { j++; continue; }
+
+        let united = false;
+        for (let k = j + 1; k < paths.length; k++) {
+          const p2 = paths[k];
+          if (!p2) continue;
+          
+          const isP2Closed = (p2 instanceof paper.Path && p2.closed) || (p2 instanceof paper.CompoundPath);
+          if (!isP2Closed) continue;
+
+          // Check for overlap
+          if (p1.bounds.intersects(p2.bounds)) {
+            const intersection = p1.intersect(p2);
+            if (!intersection.isEmpty()) {
+              const joined = p1.unite(p2);
+              if (joined instanceof paper.Path || joined instanceof paper.CompoundPath) {
+                p1.remove();
+                p2.remove();
+                paths[j] = joined; // Replace p1 with united pathItem
+                paths.splice(k, 1);
+                united = true;
+                break;
+              }
+            }
+            intersection.remove();
+          }
+        }
+        if (!united) j++;
+      }
+    }
+
+    // Export with precise matrix transforms
+    const result = paper.project.exportSVG({ 
+      asString: true,
+      precision: 5
+    }) as string;
+    paper.project.clear();
+    return result;
+  }
+
+  /**
+   * Normalizes DPI from 72 (standard browser) to 96 (universal).
+   */
+  static normalizeDPI(value: number): number {
+    return (value * 96) / 72;
+  }
+}

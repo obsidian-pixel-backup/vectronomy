@@ -1,0 +1,31 @@
+{
+  "name": "vectronomy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "XCS to SVG vector conversion engine for laser cutting and CNC fabrication",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "keywords": [
+    "xcs",
+    "svg",
+    "laser-cutting",
+    "vector",
+    "converter"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^25.8.0",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.13"
+  },
+  "dependencies": {
+    "@panzoom/panzoom": "^4.6.2",
+    "jszip": "^3.10.1",
+    "paper": "^0.12.18"
+  }
+}

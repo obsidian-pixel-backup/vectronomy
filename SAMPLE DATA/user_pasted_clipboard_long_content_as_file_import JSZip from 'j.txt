@@ -1,0 +1,431 @@
+import JSZip from 'jszip';
+// @ts-ignore
+import svgPathBounds from 'svg-path-bounds';
+import { PathEngine } from '../pathEngine';
+
+export interface XcsElement {
+  id?: string;
+  type: string;
+  x?: number;
+  y?: number;
+  offsetX?: number;
+  offsetY?: number;
+  scale?: { x: number; y: number };
+  angle?: number;
+  dPath?: string;
+  width?: number;
+  height?: number;
+  stroke?: { visible?: boolean; width?: number };
+  lineColor?: string | number;
+  isFill?: boolean;
+  fill?: { visible?: boolean };
+  fillColor?: string | number;
+  groupTag?: string;
+  layerTag?: string;
+  fontData?: { glyphData?: string };
+  charJSONs?: any[];
+}
+
+export interface ParsedLayer {
+  id: string;
+  name: string;
+  color: string;
+  svg: string;
+}
+
+function parseColor(colorValue: string | number | undefined): string {
+  if (colorValue === undefined || colorValue === null) return 'none';
+  if (typeof colorValue === 'string') {
+    if (colorValue.startsWith('#') || colorValue.startsWith('rgb')) return colorValue;
+    return colorValue; 
+  }
+  const hex = colorValue.toString(16).padStart(6, '0');
+  return `#${hex}`;
+}
+
+class Transform {
+  a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
+  
+  multiply(t: Transform) {
+    const a = this.a * t.a + this.c * t.b;
+    const b = this.b * t.a + this.d * t.b;
+    const c = this.a * t.c + this.c * t.d;
+    const d = this.b * t.c + this.d * t.d;
+    const e = this.a * t.e + this.c * t.f + this.e;
+    const f = this.b * t.e + this.d * t.f + this.f;
+    this.a = a; this.b = b; this.c = c; this.d = d; this.e = e; this.f = f;
+    return this;
+  }
+
+  translate(x: number, y: number) {
+    const t = new Transform(); t.e = x; t.f = y; return this.multiply(t);
+  }
+
+  rotate(deg: number) {
+    const rad = deg * Math.PI / 180;
+    const t = new Transform();
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    t.a = cos; t.b = sin; t.c = -sin; t.d = cos;
+    return this.multiply(t);
+  }
+
+  scale(sx: number, sy: number) {
+    const t = new Transform(); t.a = sx; t.d = sy; return this.multiply(t);
+  }
+
+  apply(x: number, y: number) {
+    return { 
+      x: this.a * x + this.c * y + this.e, 
+      y: this.b * x + this.d * y + this.f 
+    };
+  }
+
+  clone() {
+    const t = new Transform(); 
+    t.a = this.a; t.b = this.b; t.c = this.c; t.d = this.d; t.e = this.e; t.f = this.f; 
+    return t;
+  }
+
+  toSVG() {
+    return `matrix(${this.a} ${this.b} ${this.c} ${this.d} ${this.e} ${this.f})`;
+  }
+}
+
+export async function parseXcsFile(file: File): Promise<ParsedLayer[]> {
+  let jsonData: any = null;
+
+  try {
+    const zip = await JSZip.loadAsync(file);
+    const canvasFile = zip.file('canvas.json') || zip.file('project.json');
+    if (canvasFile) {
+      const content = await canvasFile.async('text');
+      jsonData = JSON.parse(content);
+    }
+  } catch (e) {
+    try {
+      const text = await file.text();
+      jsonData = JSON.parse(text);
+    } catch (err) {
+      throw new Error('Invalid file format. Could not parse as ZIP or JSON.');
+    }
+  }
+
+  if (!jsonData) {
+    throw new Error('Could not extract JSON data from the XCS file.');
+  }
+
+  const parsedLayers: ParsedLayer[] = [];
+  const canvases = jsonData.canvas || (jsonData.project && jsonData.project.canvas) || [];
+
+  if (!Array.isArray(canvases) || canvases.length === 0) {
+    throw new Error('No compatible vector data found in the file.');
+  }
+
+  for (const [idx, canvas] of canvases.entries()) {
+    const elements: XcsElement[] = canvas.displays || [];
+    if (elements.length === 0) continue;
+
+    const groupData = canvas.groupData || {};
+    const cTitle = (canvas.title || `Panel ${idx + 1}`).replace('{panel}', 'Panel ');
+    
+    // Step 1: Mapping and Hierarchy
+    const elementMap = new Map<string, any>();
+    // First, populate from groupData (metadata groups)
+    Object.keys(groupData).forEach(tag => {
+      elementMap.set(tag, { ...groupData[tag], id: tag, type: 'GROUP' });
+    });
+    // Then, populate from displays (actual renderable elements)
+    elements.forEach(el => { 
+      if (el.id) elementMap.set(el.id, el); 
+      // Sometimes groupTag is the unique identifier for a group element
+      if (el.type === 'GROUP' && el.groupTag) elementMap.set(el.groupTag, el);
+    });
+
+    const worldTransforms = new Map<string, Transform>();
+
+    const getParent = (id: string): any | undefined => {
+      const el = elementMap.get(id);
+      if (!el || !el.groupTag) return undefined;
+      const parent = elementMap.get(el.groupTag);
+      if (parent === el) return undefined;
+      return parent;
+    };
+
+    const getTransform = (id: string): Transform => {
+      if (worldTransforms.has(id)) return worldTransforms.get(id)!;
+      const el = elementMap.get(id);
+      if (!el) return new Transform();
+
+      const local = new Transform()
+        .translate(el.x ?? el.offsetX ?? 0, el.y ?? el.offsetY ?? 0)
+        .rotate(el.angle || 0)
+        .scale(el.scale?.x ?? 1, el.scale?.y ?? 1);
+
+      const parent = getParent(id);
+      if (parent && parent.id) {
+        const parentWorld = getTransform(parent.id);
+        const world = parentWorld.clone().multiply(local);
+        worldTransforms.set(id, world);
+        return world;
+      }
+
+      worldTransforms.set(id, local);
+      return local;
+    };
+
+    // Pre-calculate all world transforms for actual display elements
+    elements.forEach(el => { if (el.id) getTransform(el.id); });
+
+    const getRootId = (id: string): string => {
+      let currentId = id;
+      const visited = new Set<string>();
+      while (true) {
+        const parent = getParent(currentId);
+        if (!parent || !parent.id || visited.has(parent.id)) break;
+        visited.add(parent.id);
+        currentId = parent.id;
+      }
+      return currentId;
+    };
+
+    // Step 2: Grouping by Root Identity (Clustering)
+    const clusters = new Map<string, XcsElement[]>();
+    elements.forEach(el => {
+      if (!el.id) return;
+      const rid = getRootId(el.id);
+      if (!clusters.has(rid)) clusters.set(rid, []);
+      clusters.get(rid)!.push(el);
+    });
+
+    const XCS_DPI = 96;
+    const validRootIds: string[] = [];
+    const clusterFootprints = new Map<string, { w: number, h: number, minX: number, minY: number }>();
+
+    for (const [rid, clusterElements] of clusters.entries()) {
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      const updateBounds = (p: {x: number, y: number}) => {
+        minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+        minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+      };
+
+      clusterElements.forEach(item => {
+        if (item.type === 'GROUP') return;
+        const worldTrans = item.id ? worldTransforms.get(item.id)! : new Transform()
+          .translate(item.x ?? item.offsetX ?? 0, item.y ?? item.offsetY ?? 0);
+
+        const processPath = (dPath: any, transform: Transform, shouldCenter = true) => {
+          if (typeof dPath !== 'string' || !dPath.trim()) return;
+          try {
+            const [left, top, right, bottom] = svgPathBounds(dPath);
+            let t = transform;
+            if (shouldCenter) {
+              const cx = (left + right) / 2;
+              const cy = (top + bottom) / 2;
+              t = transform.clone().translate(-cx, -cy);
+            }
+            [
+              t.apply(left, top), t.apply(right, top),
+              t.apply(right, bottom), t.apply(left, bottom)
+            ].forEach(updateBounds);
+          } catch(e) {}
+        };
+
+        if (item.dPath) processPath(item.dPath, worldTrans, true);
+        else if (item.fontData?.glyphData) processPath(item.fontData.glyphData, worldTrans, false);
+        else if (item.charJSONs && Array.isArray(item.charJSONs)) {
+          item.charJSONs.forEach(char => {
+            const charW = worldTrans.clone().multiply(new Transform()
+              .translate(char.x ?? char.dx ?? 0, char.y ?? char.dy ?? 0));
+            // Prioritize dPath in charJSONs for accurate flattening
+            if (char.dPath) processPath(char.dPath, charW, false);
+            else if (char.glyphData) processPath(char.glyphData, charW, false);
+          });
+        } else {
+          const w = item.width || 0, h = item.height || 0;
+          if (w > 0 || h > 0) [worldTrans.apply(-w/2, -h/2), worldTrans.apply(w/2, h/2)].forEach(updateBounds);
+        }
+      });
+
+      if (minX !== Infinity) {
+        validRootIds.push(rid);
+        clusterFootprints.set(rid, {
+          w: maxX - minX,
+          h: maxY - minY,
+          minX,
+          minY
+        });
+      }
+    }
+
+    if (validRootIds.length === 0) continue;
+
+    // Step 3: Arrange valid clusters in a Tight Grid
+    const numClusters = validRootIds.length;
+    const cols = Math.ceil(Math.sqrt(numClusters)) || 1;
+    const rows = Math.ceil(numClusters / cols) || 1;
+
+    const colWidths = new Array(cols).fill(0);
+    const rowHeights = new Array(rows).fill(0);
+
+    validRootIds.forEach((rid, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const foot = clusterFootprints.get(rid)!;
+      colWidths[col] = Math.max(colWidths[col], foot.w);
+      rowHeights[row] = Math.max(rowHeights[row], foot.h);
+    });
+
+    const SPACING = 8;
+    const PADDING = 10;
+    const colStarts = new Array(cols).fill(PADDING);
+    const rowStarts = new Array(rows).fill(PADDING);
+    for (let i = 1; i < cols; i++) colStarts[i] = colStarts[i-1] + colWidths[i-1] + SPACING;
+    for (let i = 1; i < rows; i++) rowStarts[i] = rowStarts[i-1] + rowHeights[i-1] + SPACING;
+
+    const clusterOffsets = new Map<string, { x: number, y: number }>();
+    validRootIds.forEach((rid, i) => {
+      const row = Math.floor(i / cols);
+      const col = i % cols;
+      const foot = clusterFootprints.get(rid)!;
+      
+      const cellX = colStarts[col] + (colWidths[col] - foot.w) / 2;
+      const cellY = rowStarts[row] + (rowHeights[row] - foot.h) / 2;
+      
+      clusterOffsets.set(rid, {
+        x: cellX - foot.minX,
+        y: cellY - foot.minY
+      });
+    });
+
+    const totalW = colStarts[cols-1] + colWidths[cols-1] + PADDING;
+    const totalH = rowStarts[rows-1] + rowHeights[rows-1] + PADDING;
+    const viewbox = `0 0 ${totalW} ${totalH}`;
+    const svgW = `${(totalW / XCS_DPI) * 25.4}mm`;
+    const svgH = `${(totalH / XCS_DPI) * 25.4}mm`;
+
+    // Re-identify "render roots"
+    // These are elements (or groups) that are at the top of their hierarchy within the displays array
+    // OR virtual groups that act as parents for display elements
+    const renderRoots: any[] = [];
+    const processedIds = new Set<string>();
+
+    elements.forEach(el => {
+      if (!el.id || processedIds.has(el.id)) return;
+      const rid = getRootId(el.id);
+      if (!processedIds.has(rid)) {
+        const rootNode = elementMap.get(rid);
+        if (rootNode) renderRoots.push(rootNode);
+        else renderRoots.push(el); // Fallback
+        processedIds.add(rid);
+      }
+    });
+
+    const svgStrRaw = generateFinalSvg(renderRoots, elementMap, worldTransforms, clusterOffsets, getParent, getRootId, viewbox, svgW, svgH);
+    
+    parsedLayers.push({ 
+      id: canvas.id || `canvas-${idx}`, 
+      name: cTitle, 
+      color: '#00ffc2', 
+      svg: svgStrRaw 
+    });
+  }
+
+  return parsedLayers;
+}
+
+function generateFinalSvg(
+  roots: any[],
+  elementMap: Map<string, any>, 
+  worldTransforms: Map<string, Transform>,
+  clusterOffsets: Map<string, { x: number, y: number }>,
+  getParent: (id: string) => any | undefined,
+  getRootId: (id: string) => string,
+  viewbox: string, 
+  width: string, 
+  height: string
+): string {
+  const allNodes = Array.from(elementMap.values());
+
+  const renderElement = (el: any, applyGridOffset = false): string => {
+    let transform: Transform;
+
+    if (applyGridOffset) {
+      const rootId = getRootId(el.id!);
+      const offset = clusterOffsets.get(rootId) || { x: 0, y: 0 };
+      const baseTransform = worldTransforms.get(el.id!) || new Transform()
+        .translate(el.x ?? el.offsetX ?? 0, el.y ?? el.offsetY ?? 0)
+        .rotate(el.angle || 0)
+        .scale(el.scale?.x ?? 1, el.scale?.y ?? 1);
+      transform = new Transform().translate(offset.x, offset.y).multiply(baseTransform);
+    } else {
+      // Local transform relative to parent
+      transform = new Transform()
+        .translate(el.x ?? el.offsetX ?? 0, el.y ?? el.offsetY ?? 0)
+        .rotate(el.angle || 0)
+        .scale(el.scale?.x ?? 1, el.scale?.y ?? 1);
+    }
+
+    const hasStroke = el.stroke?.visible ?? true;
+    const strokeColor = hasStroke ? parseColor(el.lineColor) : 'none';
+    const strokeWidth = el.stroke?.width ?? 1;
+    const hasFill = el.isFill === true || el.fill?.visible === true;
+    const fillColor = hasFill ? parseColor(el.fillColor) : 'none';
+
+    const commonAttrs = `stroke="${strokeColor}" stroke-width="${strokeWidth}" fill="${fillColor}"`;
+
+    if (el.type === 'GROUP') {
+      const children = allNodes.filter(child => {
+        const p = getParent(child.id);
+        return p && p.id === el.id;
+      });
+      return `<g id="group_${el.id || ''}" data-type="group" transform="${transform.toSVG()}">
+        ${children.map(c => renderElement(c, false)).join('\n')}
+      </g>`;
+    }
+
+    switch (el.type) {
+      case 'PATH': {
+        let pathT = transform;
+        if (el.dPath) {
+          try {
+            const bounds = svgPathBounds(el.dPath);
+            const cx = (bounds[0] + bounds[2]) / 2;
+            const cy = (bounds[1] + bounds[3]) / 2;
+            pathT = transform.clone().translate(-cx, -cy);
+          } catch(e) {}
+        }
+        return `<path d="${el.dPath || ''}" transform="${pathT.toSVG()}" ${commonAttrs} />`;
+      }
+      case 'CIRCLE':
+      case 'ELLIPSE':
+        return `<ellipse cx="0" cy="0" rx="${(el.width || 0) / 2}" ry="${(el.height || 0) / 2}" transform="${transform.toSVG()}" ${commonAttrs} />`;
+      case 'RECT':
+        return `<rect x="${-(el.width || 0) / 2}" y="${-(el.height || 0) / 2}" width="${el.width || 0}" height="${el.height || 0}" transform="${transform.toSVG()}" ${commonAttrs} />`;
+      case 'TEXT':
+        if (el.charJSONs && Array.isArray(el.charJSONs)) {
+          return `<g transform="${transform.toSVG()}" ${commonAttrs}>
+            ${el.charJSONs.map(char => {
+              const charLocal = new Transform()
+                .translate(char.x ?? char.dx ?? 0, char.y ?? char.dy ?? 0)
+                .rotate(char.angle || 0)
+                .scale(char.scale?.x ?? 1, char.scale?.y ?? 1);
+              const charDPath = char.dPath || char.glyphData || '';
+              return `<path d="${charDPath}" transform="${charLocal.toSVG()}" />`;
+            }).join('\n')}
+          </g>`;
+        }
+        return el.fontData?.glyphData ? `<path d="${el.fontData.glyphData}" transform="${transform.toSVG()}" ${commonAttrs} />` : '';
+      default:
+        return '';
+    }
+  };
+
+  const svgContent = roots.map(r => renderElement(r, true)).join('\n');
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewbox}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet">
+    <rect width="100%" height="100%" fill="none" />
+    ${svgContent}
+  </svg>`;
+}
+
