@@ -118,6 +118,10 @@ async function processXcsFile(file: File) {
     convertedLayers = await XcsConverter.convertFile(file, options);
     if (!convertedLayers.length) throw new Error('No vector layers found in the file.');
     setStatus('Rendering SVG…');
+    
+    // Telemetry
+    (window as any).va?.('event', { name: 'import_xcs', data: { fileName: file.name } });
+
     showStudio(performance.now() - t0, file.name);
   } catch (err: any) {
     showProcessing(false);
@@ -163,6 +167,9 @@ async function processSvgFile(file: File) {
     // Serialize enriched SVG back to a clean string
     const enrichedSvg = new XMLSerializer().serializeToString(doc);
 
+    // Telemetry
+    (window as any).va?.('event', { name: 'import_svg', data: { fileName: file.name } });
+
     convertedLayers = [{
       id: 'svg-import',
       name: file.name.replace(/\.svg$/i, ''),
@@ -185,6 +192,10 @@ function openBlankCanvas() {
   convertedLayers = [{
     id: 'blank', name: 'Canvas', color: '#00ffc2', svg: blankSvg, elementCount: 0,
   }];
+
+  // Telemetry
+  (window as any).va?.('event', { name: 'open_blank_canvas' });
+
   showStudio(0, 'New Canvas');
 }
 
@@ -551,10 +562,16 @@ function updateHistoryBtns() {
 
 document.getElementById('btn-download')!.addEventListener('click', () => {
   const layer = convertedLayers[activeLayerIndex];
-  if (layer) dlSvg(getExportableSvg(layer.svg), `${sanitize(layer.name)}.svg`);
+  if (layer) {
+    // Telemetry
+    (window as any).va?.('event', { name: 'export_svg', data: { layerName: layer.name, type: 'single' } });
+    dlSvg(getExportableSvg(layer.svg), `${sanitize(layer.name)}.svg`);
+  }
 });
 
 document.getElementById('btn-download-all')!.addEventListener('click', () => {
+  // Telemetry
+  (window as any).va?.('event', { name: 'export_svg', data: { count: convertedLayers.length, type: 'all' } });
   convertedLayers.forEach(l => dlSvg(getExportableSvg(l.svg), `${sanitize(l.name)}.svg`));
   showToast(`Downloaded ${convertedLayers.length} SVG files`);
 });
@@ -564,6 +581,8 @@ document.getElementById('btn-copy')!.addEventListener('click', async () => {
   if (!layer) return;
   const exportable = getExportableSvg(layer.svg);
   try {
+    // Telemetry
+    (window as any).va?.('event', { name: 'copy_svg_source', data: { layerName: layer.name } });
     await navigator.clipboard.writeText(exportable);
     showToast('SVG source copied to clipboard');
   } catch {
@@ -795,6 +814,9 @@ function openFeatureModal(feat: Feature, div: Division) {
   
   // Show Modal
   featureModal.style.display = 'flex';
+
+  // Telemetry
+  (window as any).va?.('event', { name: 'view_feature_readme', data: { id: feat.id, title: feat.title } });
 }
 
 // Route Navigation Triggers
@@ -815,9 +837,11 @@ function handleRouting() {
     studioApp.style.display = 'none';
     roadmapPage.style.display = 'flex';
     initRoadmapUI();
+    (window as any).va?.('event', { name: 'view_page', data: { page: 'roadmap' } });
   } else {
     studioApp.style.display = 'flex';
     roadmapPage.style.display = 'none';
+    (window as any).va?.('event', { name: 'view_page', data: { page: 'studio' } });
   }
 }
 
