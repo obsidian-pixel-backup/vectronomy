@@ -372,7 +372,39 @@ function initPanzoom(fitToView = false) {
   const wrapper = svgEl.parentElement!;
   wrapper.addEventListener('wheel', (e: WheelEvent) => {
     e.preventDefault();
-    panzoom!.zoomWithWheel(e);
+    if (!panzoom) return;
+
+    const rect = svgEl.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+
+    const oldScale = panzoom.getScale();
+    const pan = panzoom.getPan();
+    const oldTx = pan.x * oldScale;
+    const oldTy = pan.y * oldScale;
+
+    // Zoom speed step and boundaries
+    const zoomFactor = 1.15;
+    let newScale = oldScale;
+    if (e.deltaY < 0) {
+      newScale = Math.min(200, oldScale * zoomFactor);
+    } else {
+      newScale = Math.max(0.02, oldScale / zoomFactor);
+    }
+
+    if (newScale === oldScale) return;
+
+    // Compute mathematically perfect, visual-anchored translation
+    const newTx = px - (px - oldTx) * (newScale / oldScale);
+    const newTy = py - (py - oldTy) * (newScale / oldScale);
+
+    // Convert back to unscaled coordinate inputs expected by Panzoom
+    const newX = newTx / newScale;
+    const newY = newTy / newScale;
+
+    // Set scale and pan in a single layout frame to prevent jitter
+    panzoom.zoom(newScale, { animate: false });
+    panzoom.pan(newX, newY, { animate: false });
     updateZoomDisplay();
   }, { passive: false });
 
