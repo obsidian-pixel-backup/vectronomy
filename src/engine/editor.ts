@@ -27,6 +27,15 @@ export interface ElementProperties {
   elementType: string;
 }
 
+export interface PenPoint {
+  x: number;
+  y: number;
+  cp1x?: number;
+  cp1y?: number;
+  cp2x?: number;
+  cp2y?: number;
+}
+
 export class VectorEditor {
   private container: HTMLElement;
   private currentLayer: ConvertedLayer | null = null;
@@ -61,7 +70,8 @@ export class VectorEditor {
   private drawingEl: SVGElement | null = null;
   private drawStartX = 0;
   private drawStartY = 0;
-  private penPoints: { x: number; y: number }[] = [];
+  private penPoints: PenPoint[] = [];
+  private penDraggingPoint: PenPoint | null = null;
 
   constructor(
     container: HTMLElement,
@@ -84,16 +94,29 @@ export class VectorEditor {
     window.addEventListener('mouseup', this.onMouseUp.bind(this));
     this.container.addEventListener('dblclick', this.onDblClick.bind(this));
     window.addEventListener('keydown', (e) => { 
-      if (e.key === 'Escape') this.clearSelection(); 
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        if (this.activeTool === 'pen' && this.isDrawing) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.finalizePenPath();
+        } else if (e.key === 'Escape') {
+          this.clearSelection();
+        }
+      }
     });
   }
 
   setLayer(layer: ConvertedLayer) { this.currentLayer = layer; this.clearSelection(); }
 
   setTool(tool: typeof this.activeTool) {
+    if (this.activeTool === 'pen' && this.isDrawing) {
+      this.finalizePenPath();
+    }
     this.activeTool = tool;
     this.clearSelection();
     this.penPoints = [];
+    this.penDraggingPoint = null;
+    this.renderPenOverlay(); // Clear overlay
     if (tool !== 'select' && tool !== 'pan') this.onInteractionStart();
     else this.onInteractionEnd();
 
@@ -254,13 +277,26 @@ export class VectorEditor {
       const cx = parseFloat(el.getAttribute('cx') || '0');
       const cy = parseFloat(el.getAttribute('cy') || '0');
       const r = parseFloat(el.getAttribute('r') || '0');
-      d = `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx} ${cy + r} A ${r} ${r} 0 1 1 ${cx} ${cy - r} Z`;
+      const kappa = 0.5522847498;
+      const o = r * kappa;
+      d = `M ${cx} ${cy - r} ` +
+          `C ${cx + o} ${cy - r} ${cx + r} ${cy - o} ${cx + r} ${cy} ` +
+          `C ${cx + r} ${cy + o} ${cx + o} ${cy + r} ${cx} ${cy + r} ` +
+          `C ${cx - o} ${cy + r} ${cx - r} ${cy + o} ${cx - r} ${cy} ` +
+          `C ${cx - r} ${cy - o} ${cx - o} ${cy - r} ${cx} ${cy - r} Z`;
     } else if (tag === 'ellipse') {
       const cx = parseFloat(el.getAttribute('cx') || '0');
       const cy = parseFloat(el.getAttribute('cy') || '0');
       const rx = parseFloat(el.getAttribute('rx') || '0');
       const ry = parseFloat(el.getAttribute('ry') || '0');
-      d = `M ${cx} ${cy - ry} A ${rx} ${ry} 0 1 1 ${cx} ${cy + ry} A ${rx} ${ry} 0 1 1 ${cx} ${cy - ry} Z`;
+      const kappa = 0.5522847498;
+      const ox = rx * kappa;
+      const oy = ry * kappa;
+      d = `M ${cx} ${cy - ry} ` +
+          `C ${cx + ox} ${cy - ry} ${cx + rx} ${cy - oy} ${cx + rx} ${cy} ` +
+          `C ${cx + rx} ${cy + oy} ${cx + ox} ${cy + ry} ${cx} ${cy + ry} ` +
+          `C ${cx - ox} ${cy + ry} ${cx - rx} ${cy + oy} ${cx - rx} ${cy} ` +
+          `C ${cx - rx} ${cy - oy} ${cx - ox} ${cy - ry} ${cx} ${cy - ry} Z`;
     } else if (tag === 'line') {
       const x1 = parseFloat(el.getAttribute('x1') || '0');
       const y1 = parseFloat(el.getAttribute('y1') || '0');
@@ -382,7 +418,14 @@ export class VectorEditor {
   }
 
   private onMouseUp() {
-    if (this.isDrawing) { this.finalizeDraw(); return; }
+    if (this.isDrawing) {
+      if (this.activeTool === 'pen') {
+        this.penDraggingPoint = null;
+        this.renderPenOverlay();
+      }
+      this.finalizeDraw();
+      return;
+    }
     
     if (this.isMarquee && this.marqueeEl) {
       const mainSvg = this.container.querySelector('svg');
@@ -440,7 +483,6 @@ export class VectorEditor {
     if (!pt) return;
     
     // Transform click point into path-local coordinates
-    // using the full accumulated CTM (handles nested groups)
     const mainSvg = this.container.querySelector('svg') as SVGSVGElement | null;
     const viewport = mainSvg?.querySelector('#viewport') as SVGGraphicsElement || mainSvg;
     let localPt = pt;
@@ -448,7 +490,6 @@ export class VectorEditor {
       const pathCTM = el.getCTM();
       const vpCTM = (viewport as SVGGraphicsElement).getCTM();
       if (pathCTM && vpCTM) {
-        // pt is in viewport space, transform to path-local space
         const vpToPath = pathCTM.inverse().multiply(vpCTM);
         const lx = vpToPath.a * pt.x + vpToPath.c * pt.y + vpToPath.e;
         const ly = vpToPath.b * pt.x + vpToPath.d * pt.y + vpToPath.f;
@@ -456,44 +497,136 @@ export class VectorEditor {
       }
     }
     
-    // Find closest segment
-    let closestIndex = -1;
+    // --- Enterprise Grade Closest-Point Search ---
+    const totalLength = el.getTotalLength();
     let minDistance = Infinity;
-    let insertX = 0;
-    let insertY = 0;
-    
-    // Simple point-to-line distance for finding where to insert the new L command
+    let closestLength = 0;
+    let closestPt = localPt;
+
+    // Phase 1: Coarse search along visual path stroke
+    const samples = 100;
+    for (let i = 0; i <= samples; i++) {
+      const len = (i / samples) * totalLength;
+      const p = el.getPointAtLength(len);
+      const dist = Math.hypot(localPt.x - p.x, localPt.y - p.y);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestLength = len;
+        closestPt = p as DOMPoint;
+      }
+    }
+
+    // Phase 2: Fine-tune search around the closest point
+    const fineSamples = 20;
+    const searchRange = totalLength / samples;
+    const startLen = Math.max(0, closestLength - searchRange / 2);
+    const endLen = Math.min(totalLength, closestLength + searchRange / 2);
+
+    for (let i = 0; i <= fineSamples; i++) {
+      const len = startLen + (i / fineSamples) * (endLen - startLen);
+      const p = el.getPointAtLength(len);
+      const dist = Math.hypot(localPt.x - p.x, localPt.y - p.y);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestLength = len;
+        closestPt = p as DOMPoint;
+      }
+    }
+
+    // Hit-test: check if the click was within 15 screen pixels of the path stroke
+    const scale = this.getScale();
+    const hitThreshold = 15 / scale;
+    if (minDistance > hitThreshold) return; // clicked too far away!
+
+    // Find the path command segment corresponding to closestPt
+    let closestIndex = -1;
+    let minChordDistance = Infinity;
     for (let i = 1; i < this.parsedCommands.length; i++) {
       const prev = this.editingNodes.find(n => n.cmdIndex === i - 1);
       const curr = this.editingNodes.find(n => n.cmdIndex === i);
       if (!prev || !curr) continue;
       
-      // Distance from localPt to line segment (prev -> curr)
       const l2 = Math.pow(curr.x - prev.x, 2) + Math.pow(curr.y - prev.y, 2);
       let t = 0;
       if (l2 !== 0) {
-        t = Math.max(0, Math.min(1, ((localPt.x - prev.x) * (curr.x - prev.x) + (localPt.y - prev.y) * (curr.y - prev.y)) / l2));
+        t = Math.max(0, Math.min(1, ((closestPt.x - prev.x) * (curr.x - prev.x) + (closestPt.y - prev.y) * (curr.y - prev.y)) / l2));
       }
       const projX = prev.x + t * (curr.x - prev.x);
       const projY = prev.y + t * (curr.y - prev.y);
+      const dist = Math.hypot(closestPt.x - projX, closestPt.y - projY);
       
-      const dist = Math.hypot(localPt.x - projX, localPt.y - projY);
-      if (dist < minDistance) {
-        minDistance = dist;
+      if (dist < minChordDistance) {
+        minChordDistance = dist;
         closestIndex = i;
-        insertX = projX;
-        insertY = projY;
       }
     }
-    
-    // Only insert if clicked reasonably close to the stroke (e.g. 10 units local space)
-    if (closestIndex !== -1 && minDistance < 10) {
-      this.parsedCommands.splice(closestIndex, 0, { type: 'L', args: [insertX, insertY] });
+
+    if (closestIndex !== -1) {
+      const cmd = this.parsedCommands[closestIndex];
+      const prevNode = this.editingNodes.find(n => n.cmdIndex === closestIndex - 1)!;
+      
+      this.onInteractionStart();
+
+      if (cmd.type === 'C' && cmd.args.length === 6) {
+        // --- High-Fidelity Cubic Bezier Curve Splitting (de Casteljau) ---
+        const p0 = new DOMPoint(prevNode.x, prevNode.y);
+        const p1 = new DOMPoint(cmd.args[0], cmd.args[1]);
+        const p2 = new DOMPoint(cmd.args[2], cmd.args[3]);
+        const p3 = new DOMPoint(cmd.args[4], cmd.args[5]);
+        
+        // Find best t parameter along the curve segment
+        let bestT = 0.5;
+        let minD = Infinity;
+        for (let i = 0; i <= 100; i++) {
+          const t = i / 100;
+          const mt = 1 - t;
+          const x = mt*mt*mt*p0.x + 3*mt*mt*t*p1.x + 3*mt*t*t*p2.x + t*t*t*p3.x;
+          const y = mt*mt*mt*p0.y + 3*mt*mt*t*p1.y + 3*mt*t*t*p2.y + t*t*t*p3.y;
+          const d = Math.hypot(closestPt.x - x, closestPt.y - y);
+          if (d < minD) {
+            minD = d;
+            bestT = t;
+          }
+        }
+        
+        const t = bestT;
+        // de Casteljau split points
+        const q0x = (1-t)*p0.x + t*p1.x;
+        const q0y = (1-t)*p0.y + t*p1.y;
+        const q1x = (1-t)*p1.x + t*p2.x;
+        const q1y = (1-t)*p1.y + t*p2.y;
+        const q2x = (1-t)*p2.x + t*p3.x;
+        const q2y = (1-t)*p2.y + t*p3.y;
+        
+        const r0x = (1-t)*q0x + t*q1x;
+        const r0y = (1-t)*q0y + t*q1y;
+        const r1x = (1-t)*q1x + t*q2x;
+        const r1y = (1-t)*q1y + t*q2y;
+        
+        const s0x = (1-t)*r0x + t*r1x;
+        const s0y = (1-t)*r0y + t*r1y;
+        
+        // Replace single C command with two C commands
+        this.parsedCommands[closestIndex] = {
+          type: 'C',
+          args: [q0x, q0y, r0x, r0y, s0x, s0y]
+        };
+        this.parsedCommands.splice(closestIndex + 1, 0, {
+          type: 'C',
+          args: [r1x, r1y, q2x, q2y, p3.x, p3.y]
+        });
+      } else {
+        // Fallback or straight segment split: insert a clean straight L command
+        this.parsedCommands.splice(closestIndex, 0, {
+          type: 'L',
+          args: [closestPt.x, closestPt.y]
+        });
+      }
+
       el.setAttribute('d', stringifySvgPath(this.parsedCommands));
       
       // Update UI and set the new node as active
       this.draggingNode = false;
-      this.renderSelectionUI();
       
       // Find the new node index
       const newNodes = extractNodes(this.parsedCommands);
@@ -501,6 +634,7 @@ export class VectorEditor {
       
       this.renderSelectionUI();
       this.commit();
+      this.onInteractionEnd();
     }
   }
 
@@ -515,11 +649,13 @@ export class VectorEditor {
     if (this.activeTool === 'pen' && this.penPoints.length > 2) {
       const mainSvg = this.container.querySelector('svg');
       if (!this.drawingEl || !mainSvg) return;
-      const d = this.drawingEl.getAttribute('d') || '';
-      this.drawingEl.setAttribute('d', d + 'Z');
+      const d = this.getPathD(this.penPoints, true);
+      this.drawingEl.setAttribute('d', d);
       this.isDrawing = false;
       this.penPoints = [];
       this.drawingEl = null;
+      this.penDraggingPoint = null;
+      this.renderPenOverlay();
       this.commit();
     }
   }
@@ -546,14 +682,41 @@ export class VectorEditor {
         this.drawingEl.setAttribute('stroke', '#00ffc2');
         this.drawingEl.setAttribute('stroke-width', '1.5');
         this.drawingEl.setAttribute('fill', 'none');
-        this.penPoints = [{ x: pt.x, y: pt.y }];
+        
+        const newPt: PenPoint = { x: pt.x, y: pt.y };
+        this.penPoints = [newPt];
+        this.penDraggingPoint = newPt; // enable drag-shaping
+        
         this.drawingEl.setAttribute('d', `M${pt.x},${pt.y}`);
         viewport.appendChild(this.drawingEl);
+        this.renderPenOverlay(pt);
       } else {
-        // Add point
-        this.penPoints.push({ x: pt.x, y: pt.y });
-        const d = this.penPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+        // Check for click on first point to close path
+        const p0 = this.penPoints[0];
+        const dist = Math.sqrt((pt.x - p0.x) ** 2 + (pt.y - p0.y) ** 2);
+        const scale = this.getScale();
+        if (this.penPoints.length > 2 && dist < 10 / scale) {
+          // Close path!
+          const d = this.getPathD(this.penPoints, true);
+          this.drawingEl!.setAttribute('d', d);
+          
+          this.isDrawing = false;
+          this.penPoints = [];
+          this.drawingEl = null;
+          this.penDraggingPoint = null;
+          this.renderPenOverlay(); // Clear overlay
+          this.commit();
+          return;
+        }
+        
+        // Add new point
+        const newPt: PenPoint = { x: pt.x, y: pt.y };
+        this.penPoints.push(newPt);
+        this.penDraggingPoint = newPt; // enable drag-shaping
+        
+        const d = this.getPathD(this.penPoints);
         this.drawingEl!.setAttribute('d', d);
+        this.renderPenOverlay(pt);
       }
       return;
     }
@@ -597,7 +760,34 @@ export class VectorEditor {
 
   private updateDraw(e: MouseEvent) {
     if (!this.drawingEl) return;
-    if (this.activeTool === 'pen') return; // pen handled in onMouseDown
+    
+    if (this.activeTool === 'pen') {
+      const pt = this.getSvgPoint(e);
+      if (!pt) return;
+
+      if (this.penDraggingPoint) {
+        // Dragging to pull out Bezier control handles
+        this.penDraggingPoint.cp2x = pt.x;
+        this.penDraggingPoint.cp2y = pt.y;
+
+        // Inbound handle is symmetrical in the opposite direction
+        const dx = pt.x - this.penDraggingPoint.x;
+        const dy = pt.y - this.penDraggingPoint.y;
+        this.penDraggingPoint.cp1x = this.penDraggingPoint.x - dx;
+        this.penDraggingPoint.cp1y = this.penDraggingPoint.y - dy;
+
+        const d = this.getPathD(this.penPoints);
+        this.drawingEl.setAttribute('d', d);
+      } else {
+        // Just moving the mouse: update the preview line connecting the last point to the cursor
+        const previewPt: PenPoint = { x: pt.x, y: pt.y };
+        const d = this.getPathD(this.penPoints, false, previewPt);
+        this.drawingEl.setAttribute('d', d);
+      }
+      
+      this.renderPenOverlay(pt);
+      return;
+    }
 
     const pt = this.getSvgPoint(e);
     if (!pt) return;
@@ -644,10 +834,159 @@ export class VectorEditor {
   }
 
   private finalizeDraw() {
-    if (this.activeTool === 'pen') return; // pen ends on dblclick
+    if (this.activeTool === 'pen') return; // pen ends on dblclick or finalizePenPath
     this.isDrawing = false;
     this.drawingEl = null;
     this.commit();
+  }
+
+  private finalizePenPath() {
+    if (!this.drawingEl) return;
+    if (this.penPoints.length < 2) {
+      this.drawingEl.remove();
+    } else {
+      const d = this.getPathD(this.penPoints);
+      this.drawingEl.setAttribute('d', d);
+      this.commit();
+    }
+    this.isDrawing = false;
+    this.penPoints = [];
+    this.drawingEl = null;
+    this.penDraggingPoint = null;
+    this.renderPenOverlay(); // Clear overlay
+  }
+
+  private renderPenOverlay(ptMouse?: { x: number; y: number }) {
+    const mainSvg = this.container.querySelector('svg');
+    if (!mainSvg) return;
+    
+    let overlay = mainSvg.querySelector('.pen-overlay') as SVGGElement | null;
+    if (!overlay) {
+      overlay = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      overlay.setAttribute('class', 'pen-overlay');
+      overlay.setAttribute('style', 'pointer-events: none;');
+      const viewport = mainSvg.querySelector('#viewport') || mainSvg;
+      viewport.appendChild(overlay);
+    }
+    overlay.innerHTML = '';
+
+    if (!this.isDrawing || this.penPoints.length === 0) {
+      overlay.remove();
+      return;
+    }
+
+    this.penPoints.forEach(p => {
+      // Draw anchor point itself
+      const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      anchor.setAttribute('cx', `${p.x}`);
+      anchor.setAttribute('cy', `${p.y}`);
+      anchor.setAttribute('r', '3.5');
+      anchor.setAttribute('fill', '#ffffff');
+      anchor.setAttribute('stroke', '#00ffc2');
+      anchor.setAttribute('stroke-width', '1.5');
+      overlay!.appendChild(anchor);
+
+      // Draw handles
+      if (p.cp1x !== undefined && p.cp1y !== undefined) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', `${p.x}`);
+        line.setAttribute('y1', `${p.y}`);
+        line.setAttribute('x2', `${p.cp1x}`);
+        line.setAttribute('y2', `${p.cp1y}`);
+        line.setAttribute('stroke', '#00ffc2');
+        line.setAttribute('stroke-width', '1');
+        line.setAttribute('stroke-dasharray', '2,2');
+        overlay!.appendChild(line);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', `${p.cp1x}`);
+        circle.setAttribute('cy', `${p.cp1y}`);
+        circle.setAttribute('r', '3');
+        circle.setAttribute('fill', '#00ffc2');
+        overlay!.appendChild(circle);
+      }
+
+      if (p.cp2x !== undefined && p.cp2y !== undefined) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', `${p.x}`);
+        line.setAttribute('y1', `${p.y}`);
+        line.setAttribute('x2', `${p.cp2x}`);
+        line.setAttribute('y2', `${p.cp2y}`);
+        line.setAttribute('stroke', '#00ffc2');
+        line.setAttribute('stroke-width', '1');
+        line.setAttribute('stroke-dasharray', '2,2');
+        overlay!.appendChild(line);
+
+        const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        circle.setAttribute('cx', `${p.cp2x}`);
+        circle.setAttribute('cy', `${p.cp2y}`);
+        circle.setAttribute('r', '3');
+        circle.setAttribute('fill', '#00ffc2');
+        overlay!.appendChild(circle);
+      }
+    });
+
+    if (ptMouse && this.penPoints.length > 2) {
+      const p0 = this.penPoints[0];
+      const dist = Math.sqrt((ptMouse.x - p0.x) ** 2 + (ptMouse.y - p0.y) ** 2);
+      const scale = this.getScale();
+      if (dist < 10 / scale) {
+        const closeIndicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+        closeIndicator.setAttribute('cx', `${p0.x}`);
+        closeIndicator.setAttribute('cy', `${p0.y}`);
+        closeIndicator.setAttribute('r', '8');
+        closeIndicator.setAttribute('fill', 'rgba(0, 255, 194, 0.2)');
+        closeIndicator.setAttribute('stroke', '#00ffc2');
+        closeIndicator.setAttribute('stroke-width', '1.5');
+        overlay.appendChild(closeIndicator);
+      }
+    }
+  }
+
+  private getPathD(points: PenPoint[], closed: boolean = false, previewPoint?: PenPoint): string {
+    if (points.length === 0) return '';
+    let d = `M${points[0].x},${points[0].y}`;
+    
+    const pts = [...points];
+    if (previewPoint) pts.push(previewPoint);
+    
+    for (let i = 1; i < pts.length; i++) {
+      const prev = pts[i - 1];
+      const curr = pts[i];
+      
+      const hasPrevOut = prev.cp2x !== undefined && prev.cp2y !== undefined;
+      const hasCurrIn = curr.cp1x !== undefined && curr.cp1y !== undefined;
+      
+      if (hasPrevOut || hasCurrIn) {
+        const cp1x = prev.cp2x !== undefined ? prev.cp2x : prev.x;
+        const cp1y = prev.cp2y !== undefined ? prev.cp2y : prev.y;
+        const cp2x = curr.cp1x !== undefined ? curr.cp1x : curr.x;
+        const cp2y = curr.cp1y !== undefined ? curr.cp1y : curr.y;
+        d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${curr.x},${curr.y}`;
+      } else {
+        d += ` L${curr.x},${curr.y}`;
+      }
+    }
+    
+    if (closed && points.length > 2) {
+      const prev = points[points.length - 1];
+      const curr = points[0];
+      const hasPrevOut = prev.cp2x !== undefined && prev.cp2y !== undefined;
+      const hasCurrIn = curr.cp1x !== undefined && curr.cp1y !== undefined;
+      
+      if (hasPrevOut || hasCurrIn) {
+        const cp1x = prev.cp2x !== undefined ? prev.cp2x : prev.x;
+        const cp1y = prev.cp2y !== undefined ? prev.cp2y : prev.y;
+        const cp2x = curr.cp1x !== undefined ? curr.cp1x : curr.x;
+        const cp2y = curr.cp1y !== undefined ? curr.cp1y : curr.y;
+        d += ` C${cp1x},${cp1y} ${cp2x},${cp2y} ${curr.x},${curr.y}`;
+      } else {
+        d += ` L${curr.x},${curr.y}`;
+      }
+      d += 'Z';
+    }
+    
+    return d;
   }
 
   // ── Selection ─────────────────────────────────────────────────
