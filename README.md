@@ -2,7 +2,7 @@
 
 [![Status](https://img.shields.io/badge/Status-Beta_v0.01-00ffc2?style=for-the-badge&logo=codeforces&logoColor=09090f)](https://github.com/obsidian-pixel-backup/vectronomy.github.io)
 [![Tech Stack](https://img.shields.io/badge/Tech_Stack-TypeScript_%2F_Vite-007acc?style=for-the-badge&logo=typescript&logoColor=ffffff)](https://github.com/obsidian-pixel-backup/vectronomy.github.io)
-[![License](https://img.shields.io/badge/License-Proprietary-ff4444?style=for-the-badge)](https://github.com/obsidian-pixel-backup/vectronomy.github.io)
+[![License](https://img.shields.io/badge/License-MIT-00ffc2?style=for-the-badge)](https://github.com/obsidian-pixel-backup/vectronomy.github.io)
 
 > **VECTRONOMY** is a professional-grade, high-fidelity SVG Creation & Vector Editing Studio specifically tailored for laser cutting, CNC, and precision fabrication workflows.
 
@@ -90,8 +90,8 @@ Accelerate your workflow with professional CAD keybindings:
 ---
 
 > [!IMPORTANT]
-> **Proprietary Notice & Licensing**
-> The core conversion logic, internal parser schemas, and zip ingestion algorithms of VECTRONOMY represent highly confidential intellectual property and proprietary trade secrets. Unlicensed extraction, decompilation, or reverse engineering of the conversion binary or parsing scripts is strictly prohibited under applicable copyright laws.
+> **Licensing & Open Source**
+> **VECTRONOMY** is open-source software licensed under the highly permissive [MIT License](LICENSE). Feel free to inspect, fork, customize, build upon, and use it in your own fabrication pipelines and design workflows!
 
 ---
 
