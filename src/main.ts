@@ -308,6 +308,20 @@ function initEditor() {
     if (!inInput && e.key === '+') { if (panzoom) panzoom.zoomIn(); }
     if (!inInput && e.key === '-') { if (panzoom) panzoom.zoomOut(); }
     if (!inInput && e.key === '0') { if (panzoom) panzoom.reset(); }
+
+    // Arrow key micro-adjustments / nudging
+    if (!inInput && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+      const nudgeAmount = e.shiftKey ? 10 : 1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === 'ArrowLeft') dx = -nudgeAmount;
+      if (e.key === 'ArrowRight') dx = nudgeAmount;
+      if (e.key === 'ArrowUp') dy = -nudgeAmount;
+      if (e.key === 'ArrowDown') dy = nudgeAmount;
+      
+      editor?.nudgeSelected(dx, dy);
+    }
   });
 
   // ── Property inputs ───────────────────────────────────────────

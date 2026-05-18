@@ -372,7 +372,7 @@ export class VectorEditor {
     if (this.dragMode === 'move') {
       els.forEach((el: SVGGraphicsElement) => this.translateEl(el, dx, dy));
     } else if (this.dragMode === 'resize') {
-      this.resizeSelection(dx, dy, this.activeHandle!, e.shiftKey);
+      this.resizeSelection(dx, dy, this.activeHandle!, e.shiftKey, e.altKey);
     }
 
     this.dragStartX = e.clientX;
@@ -1023,7 +1023,7 @@ export class VectorEditor {
     matrixTransform.setMatrix(m);
   }
 
-  private resizeSelection(dx: number, dy: number, handle: string, shiftKey: boolean = false) {
+  private resizeSelection(dx: number, dy: number, handle: string, shiftKey: boolean = false, altKey: boolean = false) {
     const els = this.getSelectedEls();
     if (els.length === 0) return;
     const tBox = this.getUnionBBox(els);
@@ -1031,25 +1031,46 @@ export class VectorEditor {
     let sx = 1;
     let sy = 1;
 
-    if (handle.includes('r')) sx = Math.max(0.001, tBox.width + dx) / Math.max(tBox.width, 0.001);
-    if (handle.includes('l')) sx = Math.max(0.001, tBox.width - dx) / Math.max(tBox.width, 0.001);
-    if (handle.includes('b')) sy = Math.max(0.001, tBox.height + dy) / Math.max(tBox.height, 0.001);
-    if (handle.includes('t')) sy = Math.max(0.001, tBox.height - dy) / Math.max(tBox.height, 0.001);
+    // Center-based symmetrical sizing doubles the delta movement on each axis
+    const factor = altKey ? 2 : 1;
+    const adx = dx * factor;
+    const ady = dy * factor;
 
-    if (shiftKey && handle.length === 2) {
-      const maxScale = Math.max(Math.abs(sx), Math.abs(sy));
-      sx = sx < 0 ? -maxScale : maxScale;
-      sy = sy < 0 ? -maxScale : maxScale;
+    if (handle.includes('r')) sx = Math.max(0.001, tBox.width + adx) / Math.max(tBox.width, 0.001);
+    if (handle.includes('l')) sx = Math.max(0.001, tBox.width - adx) / Math.max(tBox.width, 0.001);
+    if (handle.includes('b')) sy = Math.max(0.001, tBox.height + ady) / Math.max(tBox.height, 0.001);
+    if (handle.includes('t')) sy = Math.max(0.001, tBox.height - ady) / Math.max(tBox.height, 0.001);
+
+    // Apply Shift key uniform scaling constraint
+    if (shiftKey) {
+      if (handle === 'ml' || handle === 'mr') {
+        sy = sx;
+      } else if (handle === 'tc' || handle === 'bc') {
+        sx = sy;
+      } else {
+        // Corners: uniform scale matching the dominant axis change
+        const scaleFactor = Math.abs(sx - 1) > Math.abs(sy - 1) ? sx : sy;
+        sx = scaleFactor;
+        sy = scaleFactor;
+      }
     }
 
+    // Determine the pivot point
     let pivotX = tBox.x;
     let pivotY = tBox.y;
     
-    if (handle.includes('l')) pivotX = tBox.x + tBox.width;
-    if (handle.includes('t')) pivotY = tBox.y + tBox.height;
+    if (altKey) {
+      // Figma Alt: resize centered around selection midpoint
+      pivotX = tBox.x + tBox.width / 2;
+      pivotY = tBox.y + tBox.height / 2;
+    } else {
+      // Standard: opposite corner/side acts as pivot anchor
+      if (handle.includes('l')) pivotX = tBox.x + tBox.width;
+      if (handle.includes('t')) pivotY = tBox.y + tBox.height;
 
-    if (handle === 'tc' || handle === 'bc') pivotX = tBox.x + tBox.width / 2;
-    if (handle === 'ml' || handle === 'mr') pivotY = tBox.y + tBox.height / 2;
+      if (handle === 'tc' || handle === 'bc') pivotX = tBox.x + tBox.width / 2;
+      if (handle === 'ml' || handle === 'mr') pivotY = tBox.y + tBox.height / 2;
+    }
 
     const mainSvg = this.container.querySelector('svg')!;
     const sMat = mainSvg.createSVGMatrix()
@@ -1305,6 +1326,34 @@ export class VectorEditor {
     if (!el || !el.parentNode) return;
     el.parentNode.insertBefore(el, el.parentNode.firstChild);
     this.renderSelectionUI(); this.commit();
+  }
+
+  nudgeSelected(dx: number, dy: number) {
+    if (this.activeTool === 'node' && this.activeNodeIndex !== null && this.nodeEditTarget) {
+      this.onInteractionStart();
+      const node = this.editingNodes[this.activeNodeIndex];
+      node.x += dx;
+      node.y += dy;
+      
+      const cmd = this.parsedCommands[node.cmdIndex];
+      cmd.args[node.argIndexX] = node.x;
+      cmd.args[node.argIndexY] = node.y;
+      
+      this.nodeEditTarget.setAttribute('d', stringifySvgPath(this.parsedCommands));
+      this.renderSelectionUI();
+      this.commit();
+      this.onInteractionEnd();
+      return;
+    }
+
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    this.onInteractionStart();
+    els.forEach(el => this.translateEl(el, dx, dy));
+    this.renderSelectionUI();
+    this.notifyChange(els[0] || null);
+    this.commit();
+    this.onInteractionEnd();
   }
 
   // ── Align ─────────────────────────────────────────────────────
