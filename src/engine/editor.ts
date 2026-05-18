@@ -65,13 +65,19 @@ export class VectorEditor {
   private nodeEditTarget: SVGPathElement | null = null;
 
   // Drawing state
-  activeTool: 'select' | 'pan' | 'rect' | 'circle' | 'line' | 'pen' | 'node' = 'select';
+  activeTool: 'select' | 'pan' | 'rect' | 'circle' | 'line' | 'pen' | 'node' | 'polygon' | 'star' | 'spiral' | 'pencil' | 'polyline' = 'select';
   private isDrawing = false;
   private drawingEl: SVGElement | null = null;
   private drawStartX = 0;
   private drawStartY = 0;
   private penPoints: PenPoint[] = [];
   private penDraggingPoint: PenPoint | null = null;
+
+  // Custom Shapes state
+  polygonSides = 5;
+  starPoints = 5;
+  private pencilPoints: { x: number; y: number }[] = [];
+  private polylinePoints: { x: number; y: number }[] = [];
 
   constructor(
     container: HTMLElement,
@@ -99,6 +105,10 @@ export class VectorEditor {
           e.preventDefault();
           e.stopPropagation();
           this.finalizePenPath();
+        } else if (this.activeTool === 'polyline' && this.isDrawing) {
+          e.preventDefault();
+          e.stopPropagation();
+          this.finalizePolyline();
         } else if (e.key === 'Escape') {
           this.clearSelection();
         }
@@ -111,6 +121,8 @@ export class VectorEditor {
   setTool(tool: typeof this.activeTool) {
     if (this.activeTool === 'pen' && this.isDrawing) {
       this.finalizePenPath();
+    } else if (this.activeTool === 'polyline' && this.isDrawing) {
+      this.finalizePolyline();
     }
     this.activeTool = tool;
     this.clearSelection();
@@ -721,6 +733,36 @@ export class VectorEditor {
       return;
     }
 
+    if (this.activeTool === 'polyline') {
+      if (!this.isDrawing) {
+        this.isDrawing = true;
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        this.drawingEl.setAttribute('data-xcs-id', id);
+        this.drawingEl.setAttribute('stroke', '#00ffc2');
+        this.drawingEl.setAttribute('stroke-width', '1.5');
+        this.drawingEl.setAttribute('fill', 'none');
+        
+        this.polylinePoints = [{ x: pt.x, y: pt.y }];
+        this.drawingEl.setAttribute('points', `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`);
+        viewport.appendChild(this.drawingEl);
+      } else {
+        const p0 = this.polylinePoints[0];
+        const dist = Math.sqrt((pt.x - p0.x) ** 2 + (pt.y - p0.y) ** 2);
+        const scale = this.getScale();
+        if (this.polylinePoints.length > 2 && dist < 10 / scale) {
+          this.polylinePoints.push({ x: p0.x, y: p0.y });
+          const ptsStr = this.polylinePoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+          this.drawingEl!.setAttribute('points', ptsStr);
+          this.finalizePolyline();
+          return;
+        }
+        this.polylinePoints.push({ x: pt.x, y: pt.y });
+        const ptsStr = this.polylinePoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+        this.drawingEl!.setAttribute('points', ptsStr);
+      }
+      return;
+    }
+
     this.isDrawing = true;
     this.drawStartX = pt.x;
     this.drawStartY = pt.y;
@@ -747,6 +789,23 @@ export class VectorEditor {
         this.drawingEl.setAttribute('x2', `${pt.x}`);
         this.drawingEl.setAttribute('y2', `${pt.y}`);
         break;
+      case 'polygon':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        this.drawingEl.setAttribute('points', `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`);
+        break;
+      case 'star':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+        this.drawingEl.setAttribute('points', `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`);
+        break;
+      case 'spiral':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
+        break;
+      case 'pencil':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        this.pencilPoints = [{ x: pt.x, y: pt.y }];
+        this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
+        break;
     }
 
     if (this.drawingEl) {
@@ -766,11 +825,9 @@ export class VectorEditor {
       if (!pt) return;
 
       if (this.penDraggingPoint) {
-        // Dragging to pull out Bezier control handles
         this.penDraggingPoint.cp2x = pt.x;
         this.penDraggingPoint.cp2y = pt.y;
 
-        // Inbound handle is symmetrical in the opposite direction
         const dx = pt.x - this.penDraggingPoint.x;
         const dy = pt.y - this.penDraggingPoint.y;
         this.penDraggingPoint.cp1x = this.penDraggingPoint.x - dx;
@@ -779,7 +836,6 @@ export class VectorEditor {
         const d = this.getPathD(this.penPoints);
         this.drawingEl.setAttribute('d', d);
       } else {
-        // Just moving the mouse: update the preview line connecting the last point to the cursor
         const previewPt: PenPoint = { x: pt.x, y: pt.y };
         const d = this.getPathD(this.penPoints, false, previewPt);
         this.drawingEl.setAttribute('d', d);
@@ -795,7 +851,7 @@ export class VectorEditor {
     let dy = pt.y - this.drawStartY;
 
     if (e.shiftKey) {
-      if (this.activeTool === 'rect' || this.activeTool === 'circle') {
+      if (this.activeTool === 'rect' || this.activeTool === 'circle' || this.activeTool === 'polygon' || this.activeTool === 'star') {
         const maxDist = Math.max(Math.abs(dx), Math.abs(dy));
         dx = dx < 0 ? -maxDist : maxDist;
         dy = dy < 0 ? -maxDist : maxDist;
@@ -830,14 +886,185 @@ export class VectorEditor {
         this.drawingEl.setAttribute('x2', `${pt.x}`);
         this.drawingEl.setAttribute('y2', `${pt.y}`);
         break;
+      case 'polyline': {
+        const tempPoints = [...this.polylinePoints, { x: pt.x, y: pt.y }];
+        const ptsStr = tempPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+        this.drawingEl.setAttribute('points', ptsStr);
+        break;
+      }
+      case 'polygon': {
+        const r = Math.sqrt(dx * dx + dy * dy);
+        const sides = this.polygonSides;
+        const points: string[] = [];
+        const baseAngle = Math.atan2(dy, dx);
+        for (let i = 0; i < sides; i++) {
+          const angle = baseAngle + i * (2 * Math.PI / sides);
+          const px = this.drawStartX + r * Math.cos(angle);
+          const py = this.drawStartY + r * Math.sin(angle);
+          points.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+        }
+        this.drawingEl.setAttribute('points', points.join(' '));
+        break;
+      }
+      case 'star': {
+        const rOut = Math.sqrt(dx * dx + dy * dy);
+        const rIn = rOut * 0.4;
+        const numPoints = this.starPoints;
+        const points: string[] = [];
+        const baseAngle = Math.atan2(dy, dx);
+        const totalVertices = numPoints * 2;
+        for (let i = 0; i < totalVertices; i++) {
+          const angle = baseAngle + i * (Math.PI / numPoints);
+          const r = i % 2 === 0 ? rOut : rIn;
+          const px = this.drawStartX + r * Math.cos(angle);
+          const py = this.drawStartY + r * Math.sin(angle);
+          points.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+        }
+        this.drawingEl.setAttribute('points', points.join(' '));
+        break;
+      }
+      case 'spiral': {
+        const rMax = Math.sqrt(dx * dx + dy * dy);
+        if (rMax < 2) break;
+        const baseAngle = Math.atan2(dy, dx);
+        const turns = 4;
+        const thetaMax = turns * 2 * Math.PI;
+        const b = 0.15;
+        const a = rMax / Math.exp(b * thetaMax);
+        const pathPoints: string[] = [];
+        const steps = 120;
+        for (let i = 0; i <= steps; i++) {
+          const theta = (i / steps) * thetaMax;
+          const r = a * Math.exp(b * theta);
+          const px = this.drawStartX + r * Math.cos(theta + baseAngle);
+          const py = this.drawStartY + r * Math.sin(theta + baseAngle);
+          pathPoints.push(`${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${py.toFixed(1)}`);
+        }
+        this.drawingEl.setAttribute('d', pathPoints.join(' '));
+        break;
+      }
+      case 'pencil': {
+        this.pencilPoints.push({ x: pt.x, y: pt.y });
+        const d = this.pencilPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+        this.drawingEl.setAttribute('d', d);
+        break;
+      }
     }
   }
 
   private finalizeDraw() {
-    if (this.activeTool === 'pen') return; // pen ends on dblclick or finalizePenPath
+    if (this.activeTool === 'pen' || this.activeTool === 'polyline') return;
+    
+    if (this.activeTool === 'pencil' && this.drawingEl && this.pencilPoints.length > 2) {
+      const smoothedD = this.getSmoothedPencilD(this.pencilPoints);
+      this.drawingEl.setAttribute('d', smoothedD);
+      this.pencilPoints = [];
+    }
+    
     this.isDrawing = false;
     this.drawingEl = null;
     this.commit();
+  }
+
+  finalizePolyline() {
+    if (!this.drawingEl) return;
+    if (this.polylinePoints.length < 2) {
+      this.drawingEl.remove();
+    } else {
+      const ptsStr = this.polylinePoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+      this.drawingEl.setAttribute('points', ptsStr);
+      this.commit();
+    }
+    this.isDrawing = false;
+    this.polylinePoints = [];
+    this.drawingEl = null;
+  }
+
+  private getSmoothedPencilD(pts: { x: number; y: number }[]): string {
+    if (pts.length < 2) return '';
+    if (pts.length === 2) return `M ${pts[0].x.toFixed(1)} ${pts[0].y.toFixed(1)} L ${pts[1].x.toFixed(1)} ${pts[1].y.toFixed(1)}`;
+    
+    const simplified = this.simplifyPoints(pts, 1.5);
+    let d = `M ${simplified[0].x.toFixed(1)} ${simplified[0].y.toFixed(1)}`;
+    for (let i = 0; i < simplified.length - 1; i++) {
+      const p0 = simplified[i];
+      const p1 = simplified[i + 1];
+      const pNext = simplified[i + 2] || p1;
+      const pPrev = simplified[i - 1] || p0;
+      
+      const cp1x = p0.x + (p1.x - pPrev.x) / 6;
+      const cp1y = p0.y + (p1.y - pPrev.y) / 6;
+      const cp2x = p1.x - (pNext.x - p0.x) / 6;
+      const cp2y = p1.y - (pNext.y - p0.y) / 6;
+      
+      d += ` C ${cp1x.toFixed(1)} ${cp1y.toFixed(1)} ${cp2x.toFixed(1)} ${cp2y.toFixed(1)} ${p1.x.toFixed(1)} ${p1.y.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  private simplifyPoints(pts: { x: number; y: number }[], tolerance: number): { x: number; y: number }[] {
+    if (pts.length <= 2) return pts;
+    let maxSqDist = 0;
+    let index = 0;
+    const end = pts.length - 1;
+    for (let i = 1; i < end; i++) {
+      const sqDist = this.getSqSegDist(pts[i], pts[0], pts[end]);
+      if (sqDist > maxSqDist) {
+        index = i;
+        maxSqDist = sqDist;
+      }
+    }
+    if (maxSqDist > tolerance * tolerance) {
+      const results1 = this.simplifyPoints(pts.slice(0, index + 1), tolerance);
+      const results2 = this.simplifyPoints(pts.slice(index), tolerance);
+      return results1.slice(0, results1.length - 1).concat(results2);
+    }
+    return [pts[0], pts[end]];
+  }
+
+  private getSqSegDist(p: { x: number; y: number }, p1: { x: number; y: number }, p2: { x: number; y: number }): number {
+    let x = p1.x;
+    let y = p1.y;
+    let dx = p2.x - x;
+    let dy = p2.y - y;
+    if (dx !== 0 || dy !== 0) {
+      const t = ((p.x - x) * dx + (p.y - y) * dy) / (dx * dx + dy * dy);
+      if (t > 1) {
+        x = p2.x;
+        y = p2.y;
+      } else if (t > 0) {
+        x += dx * t;
+        y += dy * t;
+      }
+    }
+    dx = p.x - x;
+    dy = p.y - y;
+    return dx * dx + dy * dy;
+  }
+
+  createGridArray(rows: number, cols: number, spacingX: number, spacingY: number) {
+    const el = this.getSelectedEl();
+    if (!el) return;
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+    if (!mainSvg || !viewport) return;
+
+    this.onInteractionStart();
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (r === 0 && c === 0) continue;
+        const clone = el.cloneNode(true) as SVGGraphicsElement;
+        const newId = `array-${Date.now()}-${r}-${c}-${Math.random().toString(36).substr(2, 4)}`;
+        clone.setAttribute('data-xcs-id', newId);
+        
+        viewport.appendChild(clone);
+        this.translateEl(clone, c * spacingX, r * spacingY);
+      }
+    }
+    this.commit();
+    this.clearSelection();
+    this.renderSelectionUI();
+    this.onInteractionEnd();
   }
 
   private finalizePenPath() {

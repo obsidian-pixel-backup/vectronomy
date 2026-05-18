@@ -243,11 +243,71 @@ body::before {
 }
 
 /* ── Tools Panel ─────────────────────────────────────────────── */
-.tools-panel { display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none; }
-.tools-panel::-webkit-scrollbar { display:none; }
+.tools-panel { display:flex; flex-direction:column; position:relative; overflow:visible; z-index:99; }
 
 .tool-group { display:flex; flex-direction:column; align-items:center; gap:6px; padding:10px 0; }
 .tool-divider { width:40px; height:1px; background:var(--glass-border); margin:2px auto; }
+
+/* Shapes Dropdown Menu Styles */
+.shapes-menu-container {
+  position: relative;
+}
+
+.shapes-popover-menu {
+  position: absolute;
+  left: 60px;
+  top: 10px;
+  display: none;
+  flex-direction: column;
+  padding: 8px;
+  gap: 4px;
+  z-index: 1000;
+  width: 140px;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.shapes-popover-menu.show {
+  display: flex;
+}
+
+.shape-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  cursor: pointer;
+  text-align: left;
+  transition: var(--transition-fast);
+}
+
+.shape-menu-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  stroke-width: 2px;
+}
+
+.shape-menu-item span {
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.shape-menu-item:hover {
+  background: var(--glass-border);
+  color: var(--text);
+}
+
+.shape-menu-item.active {
+  background: var(--accent-dim);
+  border-color: rgba(0,255,194,.4);
+  color: var(--accent);
+}
 
 .tool-btn {
   width:46px; height:46px; display:flex; align-items:center; justify-content:center;

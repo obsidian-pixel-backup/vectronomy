@@ -190,18 +190,56 @@
             <div class="tool-divider"></div>
 
             <div class="tool-group">
-              <button class="tool-btn" id="tool-rect" title="Rectangle (R)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
-              </button>
-              <button class="tool-btn" id="tool-circle" title="Ellipse (E)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
-              </button>
-              <button class="tool-btn" id="tool-line" title="Line (L)">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="19" x2="19" y2="5"/></svg>
-              </button>
               <button class="tool-btn" id="tool-pen" title="Pen / Path (P)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
               </button>
+            </div>
+
+            <div class="tool-divider"></div>
+
+            <div class="tool-group shapes-menu-container">
+              <button class="tool-btn" id="tool-shapes-toggle" title="Shapes Menu (S)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="9" height="9" rx="1"/>
+                  <circle cx="17" cy="7.5" r="4.5"/>
+                  <polygon points="12,14 6,22 18,22"/>
+                </svg>
+              </button>
+              
+              <div class="shapes-popover-menu glass" id="shapes-popover">
+                <button class="shape-menu-item" data-tool="rect" title="Rectangle (R)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+                  <span>Rectangle</span>
+                </button>
+                <button class="shape-menu-item" data-tool="circle" title="Ellipse (E)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                  <span>Ellipse</span>
+                </button>
+                <button class="shape-menu-item" data-tool="polygon" title="Regular Polygon (O)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,3 21,9 21,19 12,23 3,19 3,9"/></svg>
+                  <span>Polygon</span>
+                </button>
+                <button class="shape-menu-item" data-tool="star" title="Star Generator (S)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15,9 22,9 17,14 19,21 12,17 5,21 7,14 2,9 9,9"/></svg>
+                  <span>Star</span>
+                </button>
+                <button class="shape-menu-item" data-tool="spiral" title="Logarithmic Spiral (I)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12a1 1 0 00-1 1c0 1.1.9 2 2 2a4 4 0 004-4c0-3.3-2.7-6-6-6a8 8 0 00-8 8c0 5.5 4.5 10 10 10a12 12 0 0012-12c0-7.7-6.3-14-14-14"/></svg>
+                  <span>Spiral</span>
+                </button>
+                <button class="shape-menu-item" data-tool="pencil" title="Freehand Pencil (K)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                  <span>Pencil</span>
+                </button>
+                <button class="shape-menu-item" data-tool="line" title="Line Segment (L)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="19" x2="19" y2="5"/></svg>
+                  <span>Line</span>
+                </button>
+                <button class="shape-menu-item" data-tool="polyline" title="Multi-segment Polyline (Y)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 20 8 10 14 16 20 4"/></svg>
+                  <span>Polyline</span>
+                </button>
+              </div>
             </div>
 
             <div class="tool-divider"></div>
@@ -425,6 +463,35 @@
                       Back
                     </button>
                   </div>
+                </div>
+
+                <!-- Industrial Step-and-Repeat Array Generator -->
+                <div class="prop-section" style="border-top: 1px solid var(--glass-border); padding-top: 15px;">
+                  <div class="prop-section-title">Grid Array (Step & Repeat)</div>
+                  <div class="prop-row" style="margin-bottom: 8px;">
+                    <div class="prop-field">
+                      <label for="prop-array-rows" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Rows</label>
+                      <input type="number" id="prop-array-rows" value="2" min="1" step="1" style="width: 100%;" />
+                    </div>
+                    <div class="prop-field">
+                      <label for="prop-array-cols" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Columns</label>
+                      <input type="number" id="prop-array-cols" value="2" min="1" step="1" style="width: 100%;" />
+                    </div>
+                  </div>
+                  <div class="prop-row" style="margin-bottom: 12px;">
+                    <div class="prop-field">
+                      <label for="prop-array-spacing-x" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Spacing X (px)</label>
+                      <input type="number" id="prop-array-spacing-x" value="50" step="5" style="width: 100%;" />
+                    </div>
+                    <div class="prop-field">
+                      <label for="prop-array-spacing-y" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Spacing Y (px)</label>
+                      <input type="number" id="prop-array-spacing-y" value="50" step="5" style="width: 100%;" />
+                    </div>
+                  </div>
+                  <button id="btn-create-array" class="btn btn-secondary" style="width:100%; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 0;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                    Create Grid Array
+                  </button>
                 </div>
 
                 <!-- Delete -->

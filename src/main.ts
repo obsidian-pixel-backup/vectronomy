@@ -305,13 +305,63 @@ function initEditor() {
   // ── Tool buttons ────────────────────────────────────────────
   const toolBtns = document.querySelectorAll<HTMLButtonElement>('.tool-btn[id^="tool-"]');
   toolBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      if (btn.id === 'tool-shapes-toggle') {
+        e.stopPropagation();
+        const shapesPopover = document.getElementById('shapes-popover');
+        shapesPopover?.classList.toggle('show');
+        return;
+      }
+      
       toolBtns.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       const tool = btn.id.replace('tool-', '') as any;
       editor!.setTool(tool);
     });
   });
+
+  // ── Shapes Dropdown Item Clicks ──────────────────────────────
+  const shapesPopover = document.getElementById('shapes-popover');
+  const shapesToggle = document.getElementById('tool-shapes-toggle');
+  const shapeItems = document.querySelectorAll<HTMLButtonElement>('.shape-menu-item');
+  shapeItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.stopPropagation();
+      shapeItems.forEach(i => i.classList.remove('active'));
+      item.classList.add('active');
+
+      toolBtns.forEach(b => b.classList.remove('active'));
+      shapesToggle?.classList.add('active');
+
+      const tool = item.getAttribute('data-tool')!;
+      editor!.setTool(tool as any);
+
+      const itemSvg = item.querySelector('svg')!.cloneNode(true);
+      if (shapesToggle) {
+        shapesToggle.innerHTML = '';
+        shapesToggle.appendChild(itemSvg);
+      }
+
+      shapesPopover?.classList.remove('show');
+    });
+  });
+
+  document.addEventListener('click', () => {
+    shapesPopover?.classList.remove('show');
+  });
+
+  // ── Array Grid Generator Button Click ─────────────────────────
+  const btnCreateArray = document.getElementById('btn-create-array');
+  if (btnCreateArray) {
+    btnCreateArray.addEventListener('click', () => {
+      const rows = parseInt((document.getElementById('prop-array-rows') as HTMLInputElement).value) || 2;
+      const cols = parseInt((document.getElementById('prop-array-cols') as HTMLInputElement).value) || 2;
+      const spacingX = parseFloat((document.getElementById('prop-array-spacing-x') as HTMLInputElement).value) || 50;
+      const spacingY = parseFloat((document.getElementById('prop-array-spacing-y') as HTMLInputElement).value) || 50;
+      
+      editor?.createGridArray(rows, cols, spacingX, spacingY);
+    });
+  }
 
   // ── Undo / Redo / Delete ─────────────────────────────────────
   document.getElementById('btn-undo')!.addEventListener('click', undo);
@@ -341,7 +391,12 @@ function initEditor() {
     if (!inInput && e.key === 'h') switchTool('pan');
     if (!inInput && e.key === 'r') switchTool('rect');
     if (!inInput && e.key === 'e') switchTool('circle');
+    if (!inInput && e.key === 'o') switchTool('polygon');
+    if (!inInput && e.key === 's') switchTool('star');
+    if (!inInput && e.key === 'i') switchTool('spiral');
+    if (!inInput && e.key === 'k') switchTool('pencil');
     if (!inInput && e.key === 'l') switchTool('line');
+    if (!inInput && e.key === 'y') switchTool('polyline');
     if (!inInput && e.key === 'p') switchTool('pen');
     if (!inInput && e.key === 'n') switchTool('node');
     if (!inInput && (e.key === 'f' || e.key === 'F')) {
@@ -373,10 +428,26 @@ function initEditor() {
 
 function switchTool(tool: string) {
   const btn = document.getElementById(`tool-${tool}`);
-  if (!btn) return;
+  const shapesToggle = document.getElementById('tool-shapes-toggle');
+  
   document.querySelectorAll('.tool-btn[id^="tool-"]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  editor?.setTool(tool as any);
+  
+  if (btn) {
+    btn.classList.add('active');
+    editor?.setTool(tool as any);
+  } else {
+    const shapeItem = document.querySelector(`.shape-menu-item[data-tool="${tool}"]`);
+    if (shapeItem && shapesToggle) {
+      document.querySelectorAll('.shape-menu-item').forEach(i => i.classList.remove('active'));
+      shapeItem.classList.add('active');
+      shapesToggle.classList.add('active');
+      editor?.setTool(tool as any);
+      
+      const itemSvg = shapeItem.querySelector('svg')!.cloneNode(true);
+      shapesToggle.innerHTML = '';
+      shapesToggle.appendChild(itemSvg);
+    }
+  }
 }
 
 // ── Panzoom ────────────────────────────────────────────────────────

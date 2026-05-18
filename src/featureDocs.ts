@@ -4,7 +4,7 @@ export interface FeatureDoc {
   tech: string;
 }
 
-export const COMPLETED_FEATURES = new Set([1, 2, 3, 11, 12, 13, 15, 59, 91, 92, 96, 133, 134]);
+export const COMPLETED_FEATURES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 59, 91, 92, 96, 133, 134]);
 export const IN_PROGRESS_FEATURES = new Set([21, 22, 23, 24, 28, 62, 63]);
 
 export const FEATURE_DOCS: Record<number, FeatureDoc> = {
@@ -22,6 +22,41 @@ export const FEATURE_DOCS: Record<number, FeatureDoc> = {
     readme: "Overhauled from rigid SVG elliptical arcs into 4 connected Cubic Bezier curves using the circular approximation constant 𝜅 ≈ 0.55228475. This allows ellipses to be treated as standard morphable splines, opening them up to custom organic deformations.",
     usage: "Select the Circle/Ellipse tool (shortcut 'E'). Click and drag to define boundaries. Hold Shift to lock to a perfect circle. Once created, select the Node tool ('N') to drag any of the 4 cardinal handles and deform the ellipse into organic forms.",
     tech: "Calculates symmetric control points at rx * 𝜅 offsets from the center coordinate. Constructs 4 contiguous 'C' commands (Cubic Bezier splines) matching standard PDF/PostScript formats. Fully compatible with node insertion algorithms."
+  },
+  4: {
+    readme: "Drafts perfectly equilateral regular polygons. Supports dynamic vertex count configuration directly from the CAD properties inspector.",
+    usage: "Select the Polygon tool from the Shapes menu (shortcut 'O'). Click and drag outwards to set the radius and rotation angle.",
+    tech: "Instantiates an SVG <polygon> node. Generates N equidistant vertex coordinates at step angles of 2π/N, scaling and rotating based on the active mouse drag vector."
+  },
+  5: {
+    readme: "Renders symmetrical multi-pointed stars. Features dual radius parameters for creating custom artistic elements.",
+    usage: "Select the Star tool from the Shapes menu (shortcut 'S'). Click and drag to stretch the outer points. Hold Shift to align symmetrically.",
+    tech: "Constructs an SVG <polygon> node. Loops through 2N vertices, alternating coordinates between outer radius Rout and inner proportional radius Rin = 0.4 * Rout."
+  },
+  6: {
+    readme: "Generates logarithmic spirals expanding outwards from a central point. Ideal for architectural spirals, specialized CNC coils, springs, and ornate engraving contours.",
+    usage: "Select the Spiral tool from the Shapes menu (shortcut 'I'). Click and drag to define the spiral's outer radius boundary and expansion rate.",
+    tech: "Generates a polar coordinate sequence modeled after r = a * e^(b * θ). Translates points to cartesian space and outputs a clean <path> node with 4 complete spiral turns."
+  },
+  7: {
+    readme: "Captures smooth freehand sketches. Passes raw coordinate streams through a premium Douglas-Peucker point simplification and Hermite tangent spline-fitting pipeline to produce organic curves.",
+    usage: "Select the Pencil tool from the Shapes menu (shortcut 'K'). Click and drag to draw lines naturally. Releasing the mouse instantly smooths the path.",
+    tech: "Tracks active mouse drag coordinates, executes a Ramer-Douglas-Peucker reduction to remove jitter, and interpolates smooth cubic bezier tangents to compile a clean <path> node."
+  },
+  8: {
+    readme: "Draws single linear vectors with absolute precision. Supports angle locking constraints.",
+    usage: "Select the Line tool from the Shapes menu (shortcut 'L'). Click and drag to define the line's starting and ending coordinates. Hold Shift to constrain the angle to multiples of 45°.",
+    tech: "Creates an SVG <line> node. Snaps coordinates on Shift key down by converting the drag vector to polar space and rounding the angle to the nearest 45° increment."
+  },
+  9: {
+    readme: "Drafts contiguous sequences of connected straight lines. Excellent for rapid layout tracing and drafting geometric blueprints.",
+    usage: "Select the Polyline tool from the Shapes menu (shortcut 'Y'). Click to drop successive structural vertices. Re-click the starting anchor to close, or press Enter or Escape to finalize.",
+    tech: "Instantiates an SVG <polyline> node. Appends successive vertex coordinates on each click and binds keyboard finalization routines to cleanly seal the element."
+  },
+  10: {
+    readme: "Clones selected elements into a perfect X * Y matrix array. Optimizes sheet usage and automates high-volume laser cutting runs.",
+    usage: "Select any element on the canvas. In the properties panel, enter the desired Rows, Columns, and X/Y Spacings, then click 'Create Grid Array'.",
+    tech: "Traverses the target shape's child nodes, duplicates them, generates new unique data-xcs-id attributes, and translates the coordinates."
   },
   11: {
     readme: "Interactive Node Selection layer. Displays circular interactive handle overlays at every anchor point of a selected vector path, allowing the user to select and manipulate individual vertices.",
