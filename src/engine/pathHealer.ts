@@ -128,9 +128,11 @@ export class PathHealer {
    * Recursively collect all Path and CompoundPath items from the scene.
    */
   private static collectPaths(
-    node: paper.Item,
+    node: paper.Item | null | undefined,
     out: paper.PathItem[]
   ): void {
+    if (!node) return;
+    
     if (node instanceof paper.Path || node instanceof paper.CompoundPath) {
       out.push(node);
     } else if (node.children) {

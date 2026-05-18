@@ -120,7 +120,7 @@ const editorTourSteps: TourStep[] = [
     target: '#preview-container',
     title: 'Canvas & Preview',
     content: 'This is your main workspace. Use scroll wheel to zoom in/out. All drawing, selection, and manipulation happens here. The canvas supports infinite zoom levels.',
-    position: 'top',
+    position: 'center',
   },
   {
     target: '.props-panel',

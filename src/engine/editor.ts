@@ -841,18 +841,67 @@ export class VectorEditor {
       this.selectionGroup.setAttribute('class', 'selection-overlay');
       viewport.appendChild(this.selectionGroup);
     }
-    this.selectionGroup.innerHTML = '';
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    this.selectionGroup.appendChild(g);
 
     const d = el.getAttribute('d');
     if (!d) return;
 
     // Only parse if not actively dragging to avoid losing floating point precision or state
     if (!this.draggingNode) {
+      this.selectionGroup.innerHTML = '';
+      const newG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      this.selectionGroup.appendChild(newG);
+
       const rawCmds = parseSvgPath(d);
       this.parsedCommands = absolutizePath(rawCmds);
       this.editingNodes = extractNodes(this.parsedCommands);
+    } else {
+      // Fast path for dragging: update existing DOM elements instead of re-creating them
+      const vpScreenCTM = (viewport as SVGGraphicsElement).getScreenCTM()!;
+      const invScale = 1 / (vpScreenCTM.a || 1);
+      const hs = 4 * invScale;
+      
+      const pathCTM = el.getCTM();
+      const vpCTM = (viewport as SVGGraphicsElement).getCTM();
+      let pathToViewport: DOMMatrix | null = null;
+      if (pathCTM && vpCTM) {
+        pathToViewport = vpCTM.inverse().multiply(pathCTM);
+      }
+
+      const g = this.selectionGroup.firstChild as SVGGElement | null;
+      if (!g) return;
+
+      if (this.editingNodes.length > 1) {
+        const linePath = g.querySelector('path');
+        if (linePath) {
+          let lineD = '';
+          this.editingNodes.forEach((node, idx) => {
+            let nx = node.x, ny = node.y;
+            if (pathToViewport) {
+              const tx = pathToViewport.a * node.x + pathToViewport.c * node.y + pathToViewport.e;
+              const ty = pathToViewport.b * node.x + pathToViewport.d * node.y + pathToViewport.f;
+              nx = tx; ny = ty;
+            }
+            lineD += `${idx === 0 ? 'M' : 'L'}${nx},${ny} `;
+          });
+          linePath.setAttribute('d', lineD);
+        }
+      }
+
+      if (this.activeNodeIndex !== null) {
+        const activeRect = g.querySelector(`rect[data-node-index="${this.activeNodeIndex}"]`);
+        if (activeRect) {
+          const node = this.editingNodes[this.activeNodeIndex];
+          let nx = node.x, ny = node.y;
+          if (pathToViewport) {
+            const tx = pathToViewport.a * node.x + pathToViewport.c * node.y + pathToViewport.e;
+            const ty = pathToViewport.b * node.x + pathToViewport.d * node.y + pathToViewport.f;
+            nx = tx; ny = ty;
+          }
+          activeRect.setAttribute('x', `${nx - hs}`);
+          activeRect.setAttribute('y', `${ny - hs}`);
+        }
+      }
+      return;
     }
 
     const vpScreenCTM = (viewport as SVGGraphicsElement).getScreenCTM()!;
@@ -867,6 +916,8 @@ export class VectorEditor {
     if (pathCTM && vpCTM) {
       pathToViewport = vpCTM.inverse().multiply(pathCTM);
     }
+    
+    const g = this.selectionGroup.firstChild as SVGGElement;
 
     // Draw connecting lines between anchor nodes
     if (this.editingNodes.length > 1) {

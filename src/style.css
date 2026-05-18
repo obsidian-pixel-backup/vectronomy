@@ -438,8 +438,8 @@ body::before {
 /* ── Onboarding & Help Panel ──────────────────────────────────────── */
 
 .brand-beta {
-  font-size: 0.45em;
-  color: var(--primary);
+  font-size: 0.75em; /* ~12px (3/4 of header font size) */
+  color: var(--accent);
   font-weight: 500;
   vertical-align: middle;
   opacity: 0.9;
@@ -447,9 +447,10 @@ body::before {
 }
 
 #btn-help {
-  color: var(--primary);
+  color: var(--accent);
   background: rgba(0, 255, 194, 0.05);
-  border-radius: 50%;
+  border: 1px solid rgba(0, 255, 194, 0.15);
+  border-radius: var(--radius-md);
   width: 32px;
   height: 32px;
   padding: 0;
@@ -457,9 +458,14 @@ body::before {
   align-items: center;
   justify-content: center;
   margin-left: 8px;
+  cursor: pointer;
+  transition: var(--transition-base);
 }
 #btn-help:hover {
   background: rgba(0, 255, 194, 0.15);
+  border-color: rgba(0, 255, 194, 0.4);
+  box-shadow: 0 0 12px rgba(0, 255, 194, 0.2);
+  transform: translateY(-1px);
 }
 
 .tour-backdrop, .tour-prompt-backdrop {
