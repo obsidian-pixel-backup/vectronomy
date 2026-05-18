@@ -130,12 +130,45 @@ async function processSvgFile(file: File) {
   showProcessing(true, 'Loading SVG file…');
   try {
     const text = await file.text();
+    
+    // Parse raw text into a mutable DOM tree
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(text, 'image/svg+xml');
+    const svgEl = doc.querySelector('svg');
+    if (!svgEl) throw new Error('Invalid SVG format.');
+
+    // Establish Viewport Layer if missing
+    let viewport = svgEl.querySelector('#viewport') as SVGElement | null;
+    if (!viewport) {
+      viewport = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
+      viewport.setAttribute('id', 'viewport');
+      
+      // Move all direct children of <svg> into the viewport <g>
+      while (svgEl.firstChild) {
+        viewport.appendChild(svgEl.firstChild);
+      }
+      svgEl.appendChild(viewport);
+    }
+
+    // Inject data-xcs-ids to all standard shapes that lack them
+    const targetSelectors = 'path, rect, ellipse, circle, line, polyline, polygon, text, g';
+    const shapes = viewport.querySelectorAll(targetSelectors);
+    shapes.forEach((shape, index) => {
+      if (!shape.hasAttribute('data-xcs-id')) {
+        const uniqueId = `svg-import-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`;
+        shape.setAttribute('data-xcs-id', uniqueId);
+      }
+    });
+
+    // Serialize enriched SVG back to a clean string
+    const enrichedSvg = new XMLSerializer().serializeToString(doc);
+
     convertedLayers = [{
       id: 'svg-import',
       name: file.name.replace(/\.svg$/i, ''),
       color: '#00ffc2',
-      svg: text,
-      elementCount: (text.match(/<(path|rect|ellipse|circle|line|polyline|polygon|text|g)/g) || []).length,
+      svg: enrichedSvg,
+      elementCount: shapes.length,
     }];
     showStudio(0, file.name);
   } catch (err: any) {
