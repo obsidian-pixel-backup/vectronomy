@@ -145,10 +145,8 @@ async function processSvgFile(file: File) {
 }
 
 function openBlankCanvas() {
-  const w = 800, h = 600;
   const blankSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
   <g id="viewport">
-    <rect x="0" y="0" width="${w}" height="${h}" fill="none" stroke="rgba(255,255,255,0.05)" />
   </g>
 </svg>`;
   convertedLayers = [{
