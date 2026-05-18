@@ -273,7 +273,6 @@ function initEditor() {
   // ── Undo / Redo / Delete ─────────────────────────────────────
   document.getElementById('btn-undo')!.addEventListener('click', undo);
   document.getElementById('btn-redo')!.addEventListener('click', redo);
-  document.getElementById('btn-delete-el')!.addEventListener('click', () => editor?.deleteSelected());
   document.getElementById('btn-delete')!.addEventListener('click', () => editor?.deleteSelected());
 
   // ── Align buttons ────────────────────────────────────────────
@@ -338,7 +337,7 @@ function initPanzoom(fitToView = false) {
     setTransform: (elem, { scale, x, y }) => {
       // Apply the transform to the viewport group, not the svg itself
       if (viewport) {
-        viewport.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${x}, ${y})`);
+        viewport.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${x * scale}, ${y * scale})`);
       }
     },
     handleStartEvent: (e: any) => {
