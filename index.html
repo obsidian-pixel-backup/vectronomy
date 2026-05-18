@@ -456,7 +456,7 @@
           <div class="header-title-wrap" style="margin-left: 16px;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="roadmap-icon"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
             <h2>VECTRONOMY ENGINEERING ROADMAP</h2>
-            <span class="roadmap-badge">140 COMPREHENSIVE FEATURES</span>
+            <div id="roadmap-stats" class="roadmap-stats-header"></div>
           </div>
         </div>
         <div class="roadmap-search-wrap">
@@ -485,6 +485,49 @@
         <div id="view-roadmap-phases" class="roadmap-view" style="display: none;">
           <div class="roadmap-phases-timeline" id="roadmap-phases-timeline">
             <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Feature Documentation Modal -->
+    <div id="roadmap-feature-modal" class="roadmap-modal" style="display: none;">
+      <div class="roadmap-modal-overlay"></div>
+      <div class="roadmap-modal-content glass">
+        <header class="roadmap-modal-header">
+          <div class="roadmap-modal-title-group">
+            <span id="modal-feature-num" class="feature-card-num">#1</span>
+            <h3 id="modal-feature-title">Feature Title</h3>
+          </div>
+          <button id="modal-close-btn" class="tour-close-btn" style="background: none; border: none; font-size: 1.6rem; color: var(--text-secondary); cursor: pointer;">&times;</button>
+        </header>
+        <div class="roadmap-modal-body">
+          <div class="roadmap-modal-badge-row">
+            <span id="modal-feature-status" class="status-badge">Complete</span>
+            <span id="modal-feature-div" class="div-badge">Division 1</span>
+          </div>
+          
+          <div class="roadmap-modal-section">
+            <h4>DOCUMENTATION OVERVIEW</h4>
+            <p id="modal-feature-readme">Detailed documentation goes here...</p>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <h4>USER WORKFLOW & ACTIVATION</h4>
+            <p id="modal-feature-usage">Instructions on how to activate and use this feature...</p>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <h4 style="margin: 0;">TECHNICAL ARCHITECTURE</h4>
+              <button id="btn-copy-spec" class="btn btn-secondary btn-xs" style="padding: 2px 8px; font-size: 0.62rem; height: 20px; line-height: 1;">Copy Spec</button>
+            </div>
+            <pre><code id="modal-feature-tech">Technical specifications and code pathways...</code></pre>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <h4>COMMERCIAL & INDUSTRIAL METRICS</h4>
+            <p id="modal-feature-value">Commercial market value insights...</p>
           </div>
         </div>
       </div>

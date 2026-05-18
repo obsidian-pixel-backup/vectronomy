@@ -16,6 +16,7 @@ import { runLandingTour, runEditorTour, toggleHelpPanel } from './onboarding';
 // Import roadmap asset and parser
 import roadmapMd from '../VECTRONOMY_ROADMAP_AND_DOCUMENTATION.md?raw';
 import { parseRoadmap, Division, Phase, Feature } from './roadmapParser';
+import { COMPLETED_FEATURES, IN_PROGRESS_FEATURES, FEATURE_DOCS } from './featureDocs';
 
 // ── DOM ─────────────────────────────────────────────────────────
 
@@ -680,8 +681,90 @@ const displayFeatures  = document.getElementById('roadmap-features-display') as 
 const timelinePhases   = document.getElementById('roadmap-phases-timeline') as HTMLElement;
 const searchRoadmap    = document.getElementById('roadmap-search') as HTMLInputElement;
 
+const roadmapStats      = document.getElementById('roadmap-stats') as HTMLElement;
+const featureModal      = document.getElementById('roadmap-feature-modal') as HTMLElement;
+const modalCloseBtn     = document.getElementById('modal-close-btn') as HTMLElement;
+const modalOverlay      = featureModal.querySelector('.roadmap-modal-overlay') as HTMLElement;
+const modalFeatNum      = document.getElementById('modal-feature-num') as HTMLElement;
+const modalFeatTitle    = document.getElementById('modal-feature-title') as HTMLElement;
+const modalFeatStatus   = document.getElementById('modal-feature-status') as HTMLElement;
+const modalFeatDiv      = document.getElementById('modal-feature-div') as HTMLElement;
+const modalFeatReadme   = document.getElementById('modal-feature-readme') as HTMLElement;
+const modalFeatUsage    = document.getElementById('modal-feature-usage') as HTMLElement;
+const modalFeatTech     = document.getElementById('modal-feature-tech') as HTMLElement;
+const modalFeatValue    = document.getElementById('modal-feature-value') as HTMLElement;
+
 let activeDivisionId = 1;
 let currentSearchQuery = '';
+let activeFilter: 'all' | 'complete' | 'in-progress' | 'planned' = 'all';
+
+// Close modal event listeners
+modalCloseBtn.addEventListener('click', () => {
+  featureModal.style.display = 'none';
+});
+modalOverlay.addEventListener('click', () => {
+  featureModal.style.display = 'none';
+});
+
+// Copy Technical Specification
+const btnCopySpec = document.getElementById('btn-copy-spec') as HTMLButtonElement;
+btnCopySpec.addEventListener('click', async () => {
+  const code = modalFeatTech.textContent || '';
+  try {
+    await navigator.clipboard.writeText(code);
+    btnCopySpec.textContent = 'Copied!';
+    btnCopySpec.style.borderColor = '#00ff88';
+    btnCopySpec.style.color = '#00ff88';
+    setTimeout(() => {
+      btnCopySpec.textContent = 'Copy Spec';
+      btnCopySpec.style.borderColor = '';
+      btnCopySpec.style.color = '';
+    }, 1500);
+  } catch (err) {
+    showToast('Failed to copy spec', true);
+  }
+});
+
+// Shared helper to launch modal from feature grids or timeline clicks
+function openFeatureModal(feat: Feature, div: Division) {
+  let statusText = 'PLANNED';
+  let statusClass = 'planned';
+  if (COMPLETED_FEATURES.has(feat.id)) {
+    statusText = 'SHIPPED';
+    statusClass = 'complete';
+  } else if (IN_PROGRESS_FEATURES.has(feat.id)) {
+    statusText = 'IN DEV';
+    statusClass = 'in-progress';
+  }
+
+  // Populate modal
+  modalFeatNum.textContent = `#${feat.id}`;
+  modalFeatTitle.textContent = feat.title;
+  
+  // Status Badge
+  modalFeatStatus.textContent = statusText;
+  modalFeatStatus.className = `status-badge ${statusClass}`;
+  
+  // Division Badge
+  modalFeatDiv.textContent = `Division ${div.id}: ${div.title}`;
+  
+  // Readme & Usage Documentation
+  if (FEATURE_DOCS[feat.id]) {
+    modalFeatReadme.textContent = FEATURE_DOCS[feat.id].readme;
+    modalFeatUsage.textContent = FEATURE_DOCS[feat.id].usage;
+    modalFeatTech.textContent = FEATURE_DOCS[feat.id].tech;
+  } else {
+    modalFeatReadme.textContent = "This feature is currently in the active planning phase. We are designing native integrations to satisfy this target soon!";
+    modalFeatUsage.textContent = "Usage guidelines will be made available as soon as this feature moves into the active deployment phase.";
+    modalFeatTech.textContent = `Technical Specifications:\n${feat.technicalIntegration}`;
+  }
+  
+  // Value
+  modalFeatValue.textContent = feat.marketValue;
+  
+  // Show Modal
+  featureModal.style.display = 'flex';
+}
 
 // Route Navigation Triggers
 btnRoadmap.addEventListener('click', () => {
@@ -731,8 +814,29 @@ function switchRoadmapTab(tabName: 'divisions' | 'phases') {
 }
 
 function initRoadmapUI() {
+  updateRoadmapStats();
   renderDivisionsSidebar();
   renderFeaturesList();
+}
+
+function updateRoadmapStats() {
+  if (!roadmapStats) return;
+  const total = 140;
+  const completed = COMPLETED_FEATURES.size;
+  const pct = ((completed / total) * 100).toFixed(1);
+  roadmapStats.innerHTML = `
+    <div class="roadmap-stat-box">
+      <span class="roadmap-stat-label">Total Shipped</span>
+      <span class="roadmap-stat-value">${completed} / ${total} Features</span>
+    </div>
+    <div class="roadmap-stat-box">
+      <span class="roadmap-stat-label">Completion</span>
+      <span class="roadmap-stat-value">${pct}%</span>
+    </div>
+    <div class="roadmap-progress-bar-wrap">
+      <div class="roadmap-progress-bar-fill" style="width: ${pct}%;"></div>
+    </div>
+  `;
 }
 
 function renderDivisionsSidebar() {
@@ -762,19 +866,18 @@ function renderDivisionsSidebar() {
 function renderFeaturesList() {
   displayFeatures.innerHTML = '';
   
+  let sourceFeatures: { feature: Feature, division: Division }[] = [];
+  
   if (currentSearchQuery) {
     const q = currentSearchQuery.toLowerCase();
-    const matching: { feature: Feature, division: Division }[] = [];
-    
     divisions.forEach(div => {
       div.features.forEach(feat => {
-        // Support searching by feature number with # symbol (e.g. #101)
         const isNumSearch = q.startsWith('#');
         const numToMatch = isNumSearch ? parseInt(q.slice(1)) : -1;
         
         if (isNumSearch) {
           if (feat.id === numToMatch) {
-            matching.push({ feature: feat, division: div });
+            sourceFeatures.push({ feature: feat, division: div });
           }
         } else if (
           feat.title.toLowerCase().includes(q) ||
@@ -782,7 +885,7 @@ function renderFeaturesList() {
           feat.marketValue.toLowerCase().includes(q) ||
           feat.id.toString() === q
         ) {
-          matching.push({ feature: feat, division: div });
+          sourceFeatures.push({ feature: feat, division: div });
         }
       });
     });
@@ -791,35 +894,17 @@ function renderFeaturesList() {
     const titleCard = document.createElement('div');
     titleCard.className = 'division-intro-card';
     titleCard.innerHTML = `
-      <h3>🔍 SEARCH RESULTS</h3>
-      <p>Found <b>${matching.length}</b> features matching "${esc(currentSearchQuery)}" across all CAD divisions.</p>
+      <h3>SEARCH RESULTS</h3>
+      <p>Found <b>${sourceFeatures.length}</b> features matching "${esc(currentSearchQuery)}" across all CAD divisions.</p>
     `;
     displayFeatures.appendChild(titleCard);
-    
-    if (matching.length === 0) {
-      const emptyGrid = document.createElement('div');
-      emptyGrid.className = 'features-grid';
-      emptyGrid.innerHTML = `
-        <div class="feature-card" style="grid-column: 1 / -1; text-align: center; padding: 32px; color: var(--text-secondary);">
-          <span style="font-size: 1.5rem; margin-bottom: 8px; display: block;">📭</span>
-          No matching features found. Try another term (e.g. G-code, WebGPU, Three.js, Pocket).
-        </div>
-      `;
-      displayFeatures.appendChild(emptyGrid);
-      return;
-    }
-    
-    const grid = document.createElement('div');
-    grid.className = 'features-grid';
-    matching.forEach(({ feature, division }) => {
-      grid.appendChild(createFeatureCardElement(feature, division));
-    });
-    displayFeatures.appendChild(grid);
     
   } else {
     // Render standard division list
     const div = divisions.find(d => d.id === activeDivisionId);
     if (!div) return;
+    
+    sourceFeatures = div.features.map(f => ({ feature: f, division: div }));
     
     const introCard = document.createElement('div');
     introCard.className = 'division-intro-card';
@@ -828,33 +913,106 @@ function renderFeaturesList() {
       <p>${esc(div.technicalIntro)}</p>
     `;
     displayFeatures.appendChild(introCard);
-    
-    const grid = document.createElement('div');
-    grid.className = 'features-grid';
-    div.features.forEach(feat => {
-      grid.appendChild(createFeatureCardElement(feat, div));
-    });
-    displayFeatures.appendChild(grid);
   }
+  
+  // Render interactive Quick Filters Toolbar
+  const allFeatures = sourceFeatures.map(item => item.feature);
+  renderQuickFilters(displayFeatures, allFeatures);
+  
+  // Filter features based on activeFilter
+  const filteredFeatures = sourceFeatures.filter(item => {
+    if (activeFilter === 'complete') {
+      return COMPLETED_FEATURES.has(item.feature.id);
+    }
+    if (activeFilter === 'in-progress') {
+      return IN_PROGRESS_FEATURES.has(item.feature.id);
+    }
+    if (activeFilter === 'planned') {
+      return !COMPLETED_FEATURES.has(item.feature.id) && !IN_PROGRESS_FEATURES.has(item.feature.id);
+    }
+    return true; // 'all'
+  });
+  
+  if (filteredFeatures.length === 0) {
+    const emptyGrid = document.createElement('div');
+    emptyGrid.className = 'features-grid';
+    emptyGrid.innerHTML = `
+      <div class="feature-card" style="grid-column: 1 / -1; text-align: center; padding: 32px; color: var(--text-secondary);">
+        <span style="font-family: var(--font-mono); font-size: 1.1rem; margin-bottom: 8px; display: block; opacity: 0.5;">[ NO FEATURE MATCHES ]</span>
+        No matching features match the selected filter criteria. Try resetting the active filter view.
+      </div>
+    `;
+    displayFeatures.appendChild(emptyGrid);
+    return;
+  }
+  
+  const grid = document.createElement('div');
+  grid.className = 'features-grid';
+  filteredFeatures.forEach(({ feature, division }) => {
+    grid.appendChild(createFeatureCardElement(feature, division));
+  });
+  displayFeatures.appendChild(grid);
+}
+
+function renderQuickFilters(parent: HTMLElement, featuresList: Feature[]) {
+  const row = document.createElement('div');
+  row.className = 'roadmap-quick-filters';
+  
+  const allCount = featuresList.length;
+  const completeCount = featuresList.filter(f => COMPLETED_FEATURES.has(f.id)).length;
+  const inProgressCount = featuresList.filter(f => IN_PROGRESS_FEATURES.has(f.id)).length;
+  const plannedCount = allCount - completeCount - inProgressCount;
+  
+  row.innerHTML = `
+    <button class="filter-btn${activeFilter === 'all' ? ' active' : ''}" data-filter="all">All (${allCount})</button>
+    <button class="filter-btn${activeFilter === 'complete' ? ' active' : ''}" data-filter="complete">Shipped (${completeCount})</button>
+    <button class="filter-btn${activeFilter === 'in-progress' ? ' active' : ''}" data-filter="in-progress">In Dev (${inProgressCount})</button>
+    <button class="filter-btn${activeFilter === 'planned' ? ' active' : ''}" data-filter="planned">Planned (${plannedCount})</button>
+  `;
+  
+  row.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeFilter = btn.getAttribute('data-filter') as any;
+      renderFeaturesList();
+    });
+  });
+  
+  parent.appendChild(row);
 }
 
 function createFeatureCardElement(feat: Feature, div: Division): HTMLElement {
   const card = document.createElement('div');
   card.className = 'feature-card';
+  
+  let statusText = 'PLANNED';
+  let statusClass = 'planned';
+  if (COMPLETED_FEATURES.has(feat.id)) {
+    statusText = 'SHIPPED';
+    statusClass = 'complete';
+  } else if (IN_PROGRESS_FEATURES.has(feat.id)) {
+    statusText = 'IN DEV';
+    statusClass = 'in-progress';
+  }
+  
   card.innerHTML = `
     <div class="feature-card-header">
       <span class="feature-card-title">${feat.id}. ${esc(feat.title)}</span>
-      <span class="feature-card-num" title="${esc(div.title)}">Div ${div.id}</span>
+      <span class="status-badge ${statusClass}">${statusText}</span>
     </div>
     <div class="feature-field">
-      <span class="feature-field-label">🔧 TECHNICAL SPECIFICATION</span>
+      <span class="feature-field-label">TECHNICAL SPECIFICATION</span>
       <span class="feature-field-value">${esc(feat.technicalIntegration)}</span>
     </div>
     <div class="feature-field">
-      <span class="feature-field-label">📈 COMMERCIAL VALUE</span>
+      <span class="feature-field-label">COMMERCIAL VALUE</span>
       <span class="feature-field-value market">${esc(feat.marketValue)}</span>
     </div>
   `;
+  
+  card.addEventListener('click', () => {
+    openFeatureModal(feat, div);
+  });
+  
   return card;
 }
 
@@ -877,7 +1035,7 @@ function renderPhasesTimeline() {
           <span class="phase-duration">${esc(phase.duration)}</span>
         </div>
         <div class="phase-focus">${esc(phase.focus)}</div>
-        <div class="phase-goal"><b>🎯 Phase Target:</b> ${esc(phase.goal)}</div>
+        <div class="phase-goal"><b>Phase Target:</b> ${esc(phase.goal)}</div>
         <div class="phase-features-list">
           <span style="font-size: 0.6rem; color: var(--text-muted); font-family: var(--font-mono); margin-right: 4px;">FEATURES INCLUDED:</span>
           ${featTags}
@@ -892,12 +1050,16 @@ function renderPhasesTimeline() {
         const fId = parseInt(tag.getAttribute('data-feature-id')!);
         const div = divisions.find(d => d.features.some(f => f.id === fId));
         if (div) {
+          const feat = div.features.find(f => f.id === fId)!;
           activeDivisionId = div.id;
           switchRoadmapTab('divisions');
           initRoadmapUI();
           searchRoadmap.value = `#${fId}`;
           currentSearchQuery = `#${fId}`;
           renderFeaturesList();
+          
+          // Auto-open modal documentation on click
+          openFeatureModal(feat, div);
         }
       });
     });
