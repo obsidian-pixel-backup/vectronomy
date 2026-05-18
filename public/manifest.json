@@ -1,0 +1,18 @@
+{
+  "short_name": "Vectronomy",
+  "name": "Vectronomy — SVG Creation & Conversion Studio",
+  "description": "Professional-grade browser-based XCS to SVG converter and vector editing studio for laser cutting, CNC, and precision fabrication.",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌌</text></svg>",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#09090f",
+  "theme_color": "#09090f",
+  "display": "standalone",
+  "orientation": "portrait"
+}

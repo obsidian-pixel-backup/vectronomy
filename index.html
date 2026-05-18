@@ -3,12 +3,63 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="VECTRONOMY — Professional XCS to SVG conversion and vector editing studio for laser cutting, CNC, and precision fabrication." />
-  <title>VECTRONOMY — SVG Creation & Conversion Studio</title>
+  
+  <!-- SEO Master Tags -->
+  <title>Vectronomy — Free Online SVG Creator, XCS Converter & Laser CAD Studio</title>
+  <meta name="description" content="Vectronomy is a free, high-performance client-side XCS to SVG converter and vector editing studio. Import XCS project files, customize node anchors, adjust stroke cap/joins, and export clean, production-ready SVGs for laser cutting, CNC, and fabrication." />
+  <meta name="keywords" content="xcs to svg, xcs converter, online svg creator, free vector editor, laser cut vector studio, cnc vector design, xtool xcs to svg, paperjs svg editor, browser cad, bezier pen tool" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://vectronomy.github.io/" />
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Vectronomy — Online SVG Creator, XCS Converter & Laser CAD Studio" />
+  <meta property="og:description" content="Free, browser-based XCS to SVG converter and premium vector studio. Create, edit, and export clean SVGs for laser cutting and CNC fabrication with a high-fidelity CAD workspace." />
+  <meta property="og:url" content="https://vectronomy.github.io/" />
+  <meta property="og:image" content="https://vectronomy.github.io/assets/og-preview.png" />
+  <meta property="og:site_name" content="Vectronomy Studio" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Vectronomy — Online SVG Creator, XCS Converter & Laser CAD Studio" />
+  <meta name="twitter:description" content="Free, browser-based XCS to SVG converter and premium vector studio. Create, edit, and export clean SVGs for laser cutting and CNC fabrication." />
+  <meta name="twitter:image" content="https://vectronomy.github.io/assets/og-preview.png" />
+
+  <!-- Theme Color and Favicon -->
+  <meta name="theme-color" content="#09090f" />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌌</text></svg>" />
+
+  <!-- Google Fonts Preconnect -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/src/style.css" />
+
+  <!-- Structured Data (JSON-LD Rich Snippet) -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Vectronomy",
+    "alternateName": "VECTRONOMY Vector Studio",
+    "url": "https://vectronomy.github.io/",
+    "image": "https://vectronomy.github.io/assets/og-preview.png",
+    "description": "Professional-grade browser-based XCS to SVG converter and vector editing studio for laser cutting, CNC, and precision fabrication.",
+    "applicationCategory": "DesignApplication",
+    "operatingSystem": "All",
+    "browserRequirements": "Requires HTML5, Canvas, and SVG support.",
+    "license": "https://opensource.org/licenses/MIT",
+    "featureList": [
+      "XCS project to SVG conversion",
+      "Interactive bezier pen drawing tool",
+      "High-precision node handle editing",
+      "Full align and distribution layout grid",
+      "Fabrication-ready layered SVG exporter"
+    ]
+  }
+  </script>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌌</text></svg>" />
 </head>
 <body>
   <div id="app">
@@ -63,7 +114,7 @@
               <path d="M40 25V55M25 40H55" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
             </svg>
           </div>
-          <p class="drop-title">Drop your file here to get started</p>
+          <h2 class="drop-title">Drop your XCS project or SVG design file here</h2>
           <p class="drop-subtitle">Supports <span class="tag">.xcs</span> <span class="tag">.json</span> <span class="tag">.zip</span> <span class="tag">.svg</span></p>
           <div class="drop-actions">
             <button id="btn-browse-xcs" class="btn btn-primary">Import XCS / JSON</button>
@@ -87,7 +138,7 @@
             <div id="layer-tabs" class="layer-tabs"></div>
           </div>
           <div class="topbar-right">
-            <div id="conversion-stats" class="conversion-stats"></div>
+            <div id="conversion-stats" class="conversion-stats" aria-live="polite"></div>
             <button id="btn-download" class="btn btn-primary btn-sm">
               <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
               Export SVG
@@ -106,7 +157,7 @@
 
           <!-- ── Left Tools Panel ──────────────────────────────── -->
           <aside class="tools-panel glass">
-            <div class="panel-header">Tools</div>
+            <h2 class="panel-header">Vector Tools</h2>
 
             <div class="tool-group">
               <button class="tool-btn active" id="tool-select" title="Select / Move (V)">
@@ -194,7 +245,7 @@
 
           <!-- ── Right Properties Panel ────────────────────────── -->
           <aside id="properties-panel" class="properties-panel glass">
-            <div class="panel-header">Properties</div>
+            <h2 class="panel-header">Element Properties</h2>
             <div class="panel-content">
 
               <!-- No Selection State -->
