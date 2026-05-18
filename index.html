@@ -92,6 +92,10 @@
         <div class="brand-text">
           <h1>VECTRONOMY <span class="brand-beta">(BETA v0.01.2026)</span></h1>
         </div>
+        <button id="btn-roadmap" class="btn btn-ghost btn-sm" title="Vectronomy Feature Roadmap" style="margin-left: 8px; border: 1px dashed var(--border-accent); color: var(--accent); gap: 4px; padding: 4px 10px; height: 26px; font-size: 0.72rem; background: var(--accent-soft);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px; stroke: var(--accent);"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+          Roadmap
+        </button>
       </div>
 
       <nav class="header-nav">
@@ -441,6 +445,53 @@
 
       </section>
     </main>
+  </div>
+
+  <!-- ── Dedicated Roadmap Page Route ────────────────────────── -->
+  <div id="roadmap-page" style="display: none;">
+    <div class="roadmap-page-container">
+      <header class="roadmap-page-header">
+        <div class="header-left" style="display: flex; align-items: center;">
+          <button id="btn-roadmap-back" class="btn btn-secondary btn-sm" title="Return to CAD workspace">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width: 13px; height: 13px; margin-right: 4px;"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Back to Editor
+          </button>
+          <div class="header-title-wrap" style="margin-left: 16px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="roadmap-icon"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
+            <h2>VECTRONOMY ENGINEERING ROADMAP</h2>
+            <span class="roadmap-badge">140 COMPREHENSIVE FEATURES</span>
+          </div>
+        </div>
+        <div class="roadmap-search-wrap">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="roadmap-search" placeholder="Search features by keyword (e.g. G-code, WebGPU, Three.js)..." />
+        </div>
+      </header>
+
+      <div class="roadmap-page-tabs">
+        <button id="tab-roadmap-divisions" class="roadmap-tab active">14 TECHNICAL DIVISIONS</button>
+        <button id="tab-roadmap-phases" class="roadmap-tab">7 DEVELOPMENT PHASES</button>
+      </div>
+
+      <div class="roadmap-page-content">
+        <!-- Divisions view -->
+        <div id="view-roadmap-divisions" class="roadmap-view">
+          <aside class="roadmap-divisions-sidebar" id="roadmap-divisions-sidebar">
+            <!-- Dynamically populated -->
+          </aside>
+          <main class="roadmap-features-display" id="roadmap-features-display">
+            <!-- Dynamically populated -->
+          </main>
+        </div>
+
+        <!-- Phases view -->
+        <div id="view-roadmap-phases" class="roadmap-view" style="display: none;">
+          <div class="roadmap-phases-timeline" id="roadmap-phases-timeline">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/main.ts"></script>

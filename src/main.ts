@@ -13,6 +13,10 @@ import { VectorEditor } from './engine/editor';
 import type { ElementProperties } from './engine/editor';
 import { runLandingTour, runEditorTour, toggleHelpPanel } from './onboarding';
 
+// Import roadmap asset and parser
+import roadmapMd from '../VECTRONOMY_ROADMAP_AND_DOCUMENTATION.md?raw';
+import { parseRoadmap, Division, Phase, Feature } from './roadmapParser';
+
 // ── DOM ─────────────────────────────────────────────────────────
 
 const dropZone        = document.getElementById('drop-zone') as HTMLElement;
@@ -614,6 +618,254 @@ function showToast(msg: string, isError = false) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 3200);
 }
+
+// ── Roadmap Page Controller ──────────────────────────────────────────
+
+const { divisions, phases } = parseRoadmap(roadmapMd);
+
+const roadmapPage      = document.getElementById('roadmap-page') as HTMLElement;
+const btnRoadmap       = document.getElementById('btn-roadmap') as HTMLElement;
+const btnRoadmapBack   = document.getElementById('btn-roadmap-back') as HTMLElement;
+const tabDivisions     = document.getElementById('tab-roadmap-divisions') as HTMLButtonElement;
+const tabPhases        = document.getElementById('tab-roadmap-phases') as HTMLButtonElement;
+const viewDivisions    = document.getElementById('view-roadmap-divisions') as HTMLElement;
+const viewPhases       = document.getElementById('view-roadmap-phases') as HTMLElement;
+const sidebarDivisions = document.getElementById('roadmap-divisions-sidebar') as HTMLElement;
+const displayFeatures  = document.getElementById('roadmap-features-display') as HTMLElement;
+const timelinePhases   = document.getElementById('roadmap-phases-timeline') as HTMLElement;
+const searchRoadmap    = document.getElementById('roadmap-search') as HTMLInputElement;
+
+let activeDivisionId = 1;
+let currentSearchQuery = '';
+
+// Route Navigation Triggers
+btnRoadmap.addEventListener('click', () => {
+  window.location.hash = 'roadmap';
+});
+
+btnRoadmapBack.addEventListener('click', () => {
+  window.location.hash = '';
+});
+
+// Client-Side Router
+function handleRouting() {
+  const hash = window.location.hash;
+  const studioApp = document.getElementById('app') as HTMLElement;
+  
+  if (hash === '#roadmap') {
+    studioApp.style.display = 'none';
+    roadmapPage.style.display = 'flex';
+    initRoadmapUI();
+  } else {
+    studioApp.style.display = 'flex';
+    roadmapPage.style.display = 'none';
+  }
+}
+
+window.addEventListener('hashchange', handleRouting);
+window.addEventListener('load', handleRouting);
+handleRouting(); // Immediate routing invocation for initial load
+
+// Tab navigation
+tabDivisions.addEventListener('click', () => switchRoadmapTab('divisions'));
+tabPhases.addEventListener('click', () => switchRoadmapTab('phases'));
+
+function switchRoadmapTab(tabName: 'divisions' | 'phases') {
+  if (tabName === 'divisions') {
+    tabDivisions.classList.add('active');
+    tabPhases.classList.remove('active');
+    viewDivisions.style.display = 'flex';
+    viewPhases.style.display = 'none';
+  } else {
+    tabDivisions.classList.remove('active');
+    tabPhases.classList.add('active');
+    viewDivisions.style.display = 'none';
+    viewPhases.style.display = 'flex';
+    renderPhasesTimeline();
+  }
+}
+
+function initRoadmapUI() {
+  renderDivisionsSidebar();
+  renderFeaturesList();
+}
+
+function renderDivisionsSidebar() {
+  sidebarDivisions.innerHTML = '';
+  divisions.forEach(div => {
+    const btn = document.createElement('button');
+    btn.className = `division-sidebar-btn${div.id === activeDivisionId ? ' active' : ''}`;
+    btn.innerHTML = `
+      <span class="sidebar-div-icon">${div.icon}</span>
+      <div class="sidebar-div-info">
+        <span class="sidebar-div-num">DIVISION ${div.id}</span>
+        <span class="sidebar-div-name">${div.title}</span>
+      </div>
+    `;
+    btn.addEventListener('click', () => {
+      activeDivisionId = div.id;
+      // Reset search on clicking division to let user browse division directly
+      searchRoadmap.value = '';
+      currentSearchQuery = '';
+      renderDivisionsSidebar();
+      renderFeaturesList();
+    });
+    sidebarDivisions.appendChild(btn);
+  });
+}
+
+function renderFeaturesList() {
+  displayFeatures.innerHTML = '';
+  
+  if (currentSearchQuery) {
+    const q = currentSearchQuery.toLowerCase();
+    const matching: { feature: Feature, division: Division }[] = [];
+    
+    divisions.forEach(div => {
+      div.features.forEach(feat => {
+        // Support searching by feature number with # symbol (e.g. #101)
+        const isNumSearch = q.startsWith('#');
+        const numToMatch = isNumSearch ? parseInt(q.slice(1)) : -1;
+        
+        if (isNumSearch) {
+          if (feat.id === numToMatch) {
+            matching.push({ feature: feat, division: div });
+          }
+        } else if (
+          feat.title.toLowerCase().includes(q) ||
+          feat.technicalIntegration.toLowerCase().includes(q) ||
+          feat.marketValue.toLowerCase().includes(q) ||
+          feat.id.toString() === q
+        ) {
+          matching.push({ feature: feat, division: div });
+        }
+      });
+    });
+    
+    // Title card for search
+    const titleCard = document.createElement('div');
+    titleCard.className = 'division-intro-card';
+    titleCard.innerHTML = `
+      <h3>🔍 SEARCH RESULTS</h3>
+      <p>Found <b>${matching.length}</b> features matching "${esc(currentSearchQuery)}" across all CAD divisions.</p>
+    `;
+    displayFeatures.appendChild(titleCard);
+    
+    if (matching.length === 0) {
+      const emptyGrid = document.createElement('div');
+      emptyGrid.className = 'features-grid';
+      emptyGrid.innerHTML = `
+        <div class="feature-card" style="grid-column: 1 / -1; text-align: center; padding: 32px; color: var(--text-secondary);">
+          <span style="font-size: 1.5rem; margin-bottom: 8px; display: block;">📭</span>
+          No matching features found. Try another term (e.g. G-code, WebGPU, Three.js, Pocket).
+        </div>
+      `;
+      displayFeatures.appendChild(emptyGrid);
+      return;
+    }
+    
+    const grid = document.createElement('div');
+    grid.className = 'features-grid';
+    matching.forEach(({ feature, division }) => {
+      grid.appendChild(createFeatureCardElement(feature, division));
+    });
+    displayFeatures.appendChild(grid);
+    
+  } else {
+    // Render standard division list
+    const div = divisions.find(d => d.id === activeDivisionId);
+    if (!div) return;
+    
+    const introCard = document.createElement('div');
+    introCard.className = 'division-intro-card';
+    introCard.innerHTML = `
+      <h3>${div.icon} DIVISION ${div.id}: ${esc(div.title)}</h3>
+      <p>${esc(div.technicalIntro)}</p>
+    `;
+    displayFeatures.appendChild(introCard);
+    
+    const grid = document.createElement('div');
+    grid.className = 'features-grid';
+    div.features.forEach(feat => {
+      grid.appendChild(createFeatureCardElement(feat, div));
+    });
+    displayFeatures.appendChild(grid);
+  }
+}
+
+function createFeatureCardElement(feat: Feature, div: Division): HTMLElement {
+  const card = document.createElement('div');
+  card.className = 'feature-card';
+  card.innerHTML = `
+    <div class="feature-card-header">
+      <span class="feature-card-title">${feat.id}. ${esc(feat.title)}</span>
+      <span class="feature-card-num" title="${esc(div.title)}">Div ${div.id}</span>
+    </div>
+    <div class="feature-field">
+      <span class="feature-field-label">🔧 TECHNICAL SPECIFICATION</span>
+      <span class="feature-field-value">${esc(feat.technicalIntegration)}</span>
+    </div>
+    <div class="feature-field">
+      <span class="feature-field-label">📈 COMMERCIAL VALUE</span>
+      <span class="feature-field-value market">${esc(feat.marketValue)}</span>
+    </div>
+  `;
+  return card;
+}
+
+function renderPhasesTimeline() {
+  timelinePhases.innerHTML = '';
+  
+  phases.forEach(phase => {
+    const node = document.createElement('div');
+    node.className = `phase-node${phase.id === 1 ? ' active' : ''}`;
+    
+    const featTags = phase.features.map(fId => {
+      return `<span class="phase-feature-tag" data-feature-id="${fId}">#${fId}</span>`;
+    }).join(' ');
+    
+    node.innerHTML = `
+      <div class="phase-indicator">${phase.id}</div>
+      <div class="phase-details-card">
+        <div class="phase-details-header">
+          <h3>PHASE ${phase.id}: ${esc(phase.name)}</h3>
+          <span class="phase-duration">${esc(phase.duration)}</span>
+        </div>
+        <div class="phase-focus">${esc(phase.focus)}</div>
+        <div class="phase-goal"><b>🎯 Phase Target:</b> ${esc(phase.goal)}</div>
+        <div class="phase-features-list">
+          <span style="font-size: 0.6rem; color: var(--text-muted); font-family: var(--font-mono); margin-right: 4px;">FEATURES INCLUDED:</span>
+          ${featTags}
+        </div>
+      </div>
+    `;
+    
+    // Add click event to features tags
+    node.querySelectorAll('.phase-feature-tag').forEach(tag => {
+      tag.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const fId = parseInt(tag.getAttribute('data-feature-id')!);
+        const div = divisions.find(d => d.features.some(f => f.id === fId));
+        if (div) {
+          activeDivisionId = div.id;
+          switchRoadmapTab('divisions');
+          initRoadmapUI();
+          searchRoadmap.value = `#${fId}`;
+          currentSearchQuery = `#${fId}`;
+          renderFeaturesList();
+        }
+      });
+    });
+    
+    timelinePhases.appendChild(node);
+  });
+}
+
+// Search binding
+searchRoadmap.addEventListener('input', () => {
+  currentSearchQuery = searchRoadmap.value.trim();
+  renderFeaturesList();
+});
 
 // ── Startup ───────────────────────────────────────────────────────
 
