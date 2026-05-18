@@ -218,15 +218,18 @@ export class VectorEditor {
       this.notifyChange(this.getSelectedEls()[0] || null);
       this.onInteractionStart();
     } else {
-      // Start Marquee Selection
-      if (!e.shiftKey) this.selectedIds.clear();
-      this.selectedId = null;
-      this.renderSelectionUI();
-      this.notifyChange(null as any);
-      
-      this.isMarquee = true;
-      this.marqueeStart = this.getSvgPoint(e);
-      this.onInteractionStart();
+      // Start Marquee Selection - Restricted to Shift Key held down
+      if (e.shiftKey) {
+        this.selectedId = null;
+        this.renderSelectionUI();
+        this.notifyChange(null as any);
+        
+        this.isMarquee = true;
+        this.marqueeStart = this.getSvgPoint(e);
+        this.onInteractionStart();
+      } else {
+        this.clearSelection();
+      }
     }
   }
 
