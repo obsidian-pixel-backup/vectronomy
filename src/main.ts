@@ -28,7 +28,6 @@ const processingStatus= document.getElementById('processing-status') as HTMLElem
 const studio          = document.getElementById('studio') as HTMLElement;
 const layerTabs       = document.getElementById('layer-tabs') as HTMLElement;
 const previewContainer= document.getElementById('preview-container') as HTMLElement;
-const svgSourceEl     = document.getElementById('svg-source') as HTMLElement;
 const statsEl         = document.getElementById('conversion-stats') as HTMLElement;
 const zoomDisplay     = document.getElementById('zoom-level-display') as HTMLElement;
 
@@ -302,7 +301,6 @@ async function processImageFile(file: File, dropCoords?: DOMPoint) {
           layer.svg = newSvg;
           layer.elementCount++;
         }
-        svgSourceEl.textContent = getExportableSvg(newSvg);
         pushUndo(newSvg);
         
         // Force editor to re-load layer
@@ -386,7 +384,6 @@ async function processSvgImport(file: File, dropCoords: DOMPoint) {
         layer.svg = newSvg;
         layer.elementCount += finalElements.length;
       }
-      svgSourceEl.textContent = getExportableSvg(newSvg);
       pushUndo(newSvg);
       
       if (editor) {
@@ -481,7 +478,6 @@ function showLayer(index: number) {
 
   // Render SVG
   previewContainer.innerHTML = layer.svg;
-  svgSourceEl.textContent = getExportableSvg(layer.svg);
 
   // Init editor (once)
   if (!editor) initEditor();
@@ -504,7 +500,6 @@ function initEditor() {
     (newSvg) => {
       const layer = convertedLayers[activeLayerIndex];
       if (layer) layer.svg = newSvg;
-      svgSourceEl.textContent = getExportableSvg(newSvg);
       pushUndo(newSvg);
     },
     (props) => {
@@ -884,7 +879,6 @@ function applySvgState(svg: string) {
   if (!layer) return;
   layer.svg = svg;
   previewContainer.innerHTML = svg;
-  svgSourceEl.textContent = getExportableSvg(svg);
   editor?.setLayer(layer);
   initPanzoom(true);
 }
@@ -1086,20 +1080,11 @@ document.getElementById('btn-copy')!.addEventListener('click', async () => {
   }
 });
 
-document.getElementById('btn-copy-source')!.addEventListener('click', async (e) => {
-  e.stopPropagation();
-  const layer = convertedLayers[activeLayerIndex];
-  if (!layer) return;
-  const exportable = getExportableSvg(layer.svg);
-  await navigator.clipboard.writeText(exportable).catch(() => {});
-  showToast('Copied!');
-});
-
 document.getElementById('btn-reset')!.addEventListener('click', () => {
   convertedLayers = []; activeLayerIndex = 0;
   studio.hidden = true; dropZone.hidden = false;
   fileInputXcs.value = ''; fileInputSvg.value = '';
-  previewContainer.innerHTML = ''; svgSourceEl.textContent = '';
+  previewContainer.innerHTML = '';
   statsEl.innerHTML = ''; layerTabs.innerHTML = '';
   editor = null;
   propsEmpty.hidden = false; propsSelection.hidden = true;

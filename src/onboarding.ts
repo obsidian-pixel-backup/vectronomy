@@ -117,7 +117,7 @@ const editorTourSteps: TourStep[] = [
     position: 'center',
   },
   {
-    target: '.props-panel',
+    target: '.properties-panel',
     title: 'Properties Panel',
     content: 'When you select an element, this panel shows its properties: position, size, rotation, stroke settings, fill colors, and opacity. All values are live-editable!',
     position: 'left',
@@ -129,10 +129,10 @@ const editorTourSteps: TourStep[] = [
     position: 'bottom',
   },
   {
-    target: '#zoom-level-display',
+    target: '.preview-controls',
     title: 'Zoom Controls',
     content: 'Monitor your current zoom level here. Use Ctrl + scroll wheel for precision zooming, or the zoom buttons for stepped zoom control.',
-    position: 'bottom',
+    position: 'left',
   },
 ];
 
@@ -204,7 +204,7 @@ class TourEngine {
 
     // Position spotlight and tooltip
     const target = document.querySelector(step.target) as HTMLElement;
-    if (target && step.position !== 'center') {
+    if (target) {
       const rect = target.getBoundingClientRect();
       const pad = 8;
 
@@ -214,8 +214,15 @@ class TourEngine {
       this.spotlight!.style.width = `${rect.width + pad * 2}px`;
       this.spotlight!.style.height = `${rect.height + pad * 2}px`;
 
-      // Position tooltip
-      this.positionTooltip(rect, step.position);
+      if (step.position === 'center') {
+        // Center the tooltip
+        this.tooltip!.style.left = '50%';
+        this.tooltip!.style.top = '50%';
+        this.tooltip!.style.transform = 'translate(-50%, -50%)';
+      } else {
+        // Position tooltip relative to target
+        this.positionTooltip(rect, step.position);
+      }
     } else {
       // Center the tooltip (no spotlight)
       this.spotlight!.style.display = 'none';
@@ -423,8 +430,15 @@ function createHelpPanel() {
 
 const engine = new TourEngine();
 
+let landingTourPrompted = false;
+let editorTourPrompted = false;
+
 export async function runLandingTour(force = false) {
-  if (!force && localStorage.getItem(STORAGE_KEY) === 'true') return;
+  if (force) {
+    landingTourPrompted = false;
+  }
+  if (!force && (landingTourPrompted || localStorage.getItem(STORAGE_KEY) === 'true')) return;
+  landingTourPrompted = true;
 
   const shouldTour = await showTourPrompt(
     'Welcome to Vectronomy!',
@@ -441,7 +455,11 @@ export async function runLandingTour(force = false) {
 }
 
 export async function runEditorTour(force = false) {
-  if (!force && localStorage.getItem(STORAGE_KEY_EDITOR) === 'true') return;
+  if (force) {
+    editorTourPrompted = false;
+  }
+  if (!force && (editorTourPrompted || localStorage.getItem(STORAGE_KEY_EDITOR) === 'true')) return;
+  editorTourPrompted = true;
 
   const shouldTour = await showTourPrompt(
     'Your workspace is ready!',
