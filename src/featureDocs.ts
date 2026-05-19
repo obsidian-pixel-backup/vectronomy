@@ -4,7 +4,7 @@ export interface FeatureDoc {
   tech: string;
 }
 
-export const COMPLETED_FEATURES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 59, 91, 92, 96, 133, 134]);
+export const COMPLETED_FEATURES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 59, 91, 92, 96, 97, 100, 133, 134]);
 export const IN_PROGRESS_FEATURES = new Set([21, 22, 23, 24, 28, 62, 63]);
 
 export const FEATURE_DOCS: Record<number, FeatureDoc> = {

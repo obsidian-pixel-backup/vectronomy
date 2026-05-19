@@ -1233,7 +1233,7 @@ export class VectorEditor {
     return ctm ? ctm.a : 1;
   }
 
-  private getSvgPoint(e: MouseEvent | Touch): DOMPoint | null {
+  public getSvgPoint(e: MouseEvent | Touch): DOMPoint | null {
     const mainSvg = this.container.querySelector('svg') as SVGSVGElement | null;
     const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
     if (!mainSvg || !viewport) return null;
@@ -1324,7 +1324,7 @@ export class VectorEditor {
 
   // ── Selection UI ──────────────────────────────────────────────
 
-  private renderSelectionUI() {
+  public renderSelectionUI() {
     const els = this.getSelectedEls();
     if (els.length === 0) {
       if (this.selectionGroup) { this.selectionGroup.remove(); this.selectionGroup = null; }

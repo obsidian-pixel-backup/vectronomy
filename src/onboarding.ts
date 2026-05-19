@@ -24,7 +24,7 @@ const landingTourSteps: TourStep[] = [
   {
     target: '.header-brand',
     title: 'Welcome to Vectronomy!',
-    content: 'Your professional-grade SVG vector editor & XCS conversion studio. This guided tour will walk you through every feature. Let\'s get started!',
+    content: 'Your professional-grade SVG vector editor & XCS conversion studio. Please note: This application is currently in active ALPHA stage and under heavy development. This guided tour will walk you through every feature. Let\'s get started!',
     position: 'bottom',
   },
   {
@@ -81,6 +81,12 @@ const editorTourSteps: TourStep[] = [
     position: 'right',
   },
   {
+    target: '#btn-undo',
+    title: 'Undo & Redo (Ctrl+Z / Ctrl+Y)',
+    content: 'Made a mistake? No problem! Use these buttons or keyboard shortcuts to step backward or forward through your modification history infinitely.',
+    position: 'right',
+  },
+  {
     target: '#tool-pan',
     title: 'Pan Tool (H)',
     content: 'Click and drag to pan the canvas. Pro tip: You can also pan with middle mouse button or scroll wheel from any tool!',
@@ -93,27 +99,15 @@ const editorTourSteps: TourStep[] = [
     position: 'right',
   },
   {
-    target: '#tool-rect',
-    title: 'Rectangle Tool (R)',
-    content: 'Click and drag to draw rectangles. Hold Shift for perfect squares. Switch to Node tool afterwards to edit individual corners.',
+    target: '#tool-curves-toggle',
+    title: 'Drawing Pens (P)',
+    content: 'Click this button to open the Drawing Pens menu popover. Choose the Bezier Pen to build precise curves node-by-node, or the Freehand Pencil to sketch natural organic lines.',
     position: 'right',
   },
   {
-    target: '#tool-circle',
-    title: 'Ellipse Tool (E)',
-    content: 'Click and drag to draw ellipses. Hold Shift for perfect circles.',
-    position: 'right',
-  },
-  {
-    target: '#tool-line',
-    title: 'Line Tool (L)',
-    content: 'Click and drag to draw straight lines between two points.',
-    position: 'right',
-  },
-  {
-    target: '#tool-pen',
-    title: 'Pen Tool (P)',
-    content: 'Click to place anchor points and build custom paths. Double-click to close the path and finish drawing.',
+    target: '#tool-shapes-toggle',
+    title: 'Geometric Shapes (S)',
+    content: 'Click this button to open the Geometric Shapes menu popover. Instantly draw Line Segments, Polylines, Rectangles, Ellipses, Regular Polygons, Star Generators, or Logarithmic Spirals. Hold Shift while drawing to lock perfect aspect ratios!',
     position: 'right',
   },
   {
@@ -129,9 +123,9 @@ const editorTourSteps: TourStep[] = [
     position: 'left',
   },
   {
-    target: '#btn-download',
-    title: 'Export SVG',
-    content: 'Download your work as a production-ready SVG file. Studio colors are automatically normalized to standard black (#000000) for laser-cutting and manufacturing compatibility.',
+    target: '#btn-export-toggle',
+    title: 'Multi-Format Export',
+    content: 'Download your work as a vector SVG, raster PNG, JPEG, or raw source text. You can also copy the SVG code directly to your clipboard. Layout colors are auto-normalized to cutting black (#000000) on export!',
     position: 'bottom',
   },
   {
