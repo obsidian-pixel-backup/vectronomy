@@ -1,5 +1,5 @@
-/**
- * VECTRONOMY — Interactive SVG Editor (v2)
+﻿/**
+ * VECTRONOMY ΓÇö Interactive SVG Editor (v2)
  *
  * Handles: selection, move, resize, draw (rect/circle/line/pen),
  * fill/stroke editing, opacity, rotation, z-order, align, undo/redo.
@@ -86,7 +86,6 @@ export class VectorEditor {
   // Brush/Eraser state
   brushSize = 12;
   brushStyle: 'round' | 'calligraphic' | 'flat' = 'round';
-  currentStrokeColor: string = '#00ffc2';
   private magicWandThreshold: number = 20;
   private brushPoints: { x: number; y: number }[] = [];
   private eraserPoints: { x: number; y: number }[] = [];
@@ -161,7 +160,7 @@ export class VectorEditor {
     }
   }
 
-  // ── Universal Studio Features ─────────────────────────────────────
+  // ΓöÇΓöÇ Universal Studio Features ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
   
   public async pathfinderOperation(operation: BooleanOp) {
     const els = this.getSelectedEls();
@@ -224,7 +223,7 @@ export class VectorEditor {
     }
   }
 
-  // ── Mouse Handlers ────────────────────────────────────────────
+  // ΓöÇΓöÇ Mouse Handlers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   private onMouseDown(e: MouseEvent) {
     if (e.button === 1 || this.activeTool === 'pan') return;
@@ -287,7 +286,7 @@ export class VectorEditor {
         return;
       }
       
-      // 2. Find the clicked element — could be a path, a primitive, or something inside a group
+      // 2. Find the clicked element ΓÇö could be a path, a primitive, or something inside a group
       let clickedPath: SVGPathElement | null = null;
       
       // First try: direct path hit
@@ -296,7 +295,7 @@ export class VectorEditor {
         clickedPath = directPath;
       }
       
-      // Second try: primitive shape hit — convert to path
+      // Second try: primitive shape hit ΓÇö convert to path
       if (!clickedPath) {
         const primitive = target.closest('rect, circle, ellipse, line, polygon, polyline') as SVGElement | null;
         if (primitive && !primitive.closest('.selection-overlay')) {
@@ -799,7 +798,7 @@ export class VectorEditor {
     }
   }
 
-  // ── Drawing ───────────────────────────────────────────────────
+  // ΓöÇΓöÇ Drawing ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
 
 
@@ -1547,7 +1546,7 @@ export class VectorEditor {
     return d;
   }
 
-  // ── Selection ─────────────────────────────────────────────────
+  // ΓöÇΓöÇ Selection ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   private selectElement(id: string) {
     this.selectedId = id;
@@ -1659,7 +1658,7 @@ export class VectorEditor {
     return this.container.querySelector(`[data-xcs-id="${this.selectedId}"]`);
   }
 
-  // ── Selection UI ──────────────────────────────────────────────
+  // ΓöÇΓöÇ Selection UI ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   public renderSelectionUI() {
     const els = this.getSelectedEls();
@@ -1883,7 +1882,7 @@ export class VectorEditor {
     return map[id] || 'crosshair';
   }
 
-  // ── Transform Helpers ─────────────────────────────────────────
+  // ΓöÇΓöÇ Transform Helpers ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   private getTransformedBBox(el: SVGGraphicsElement) {
     const bbox = el.getBBox();
@@ -2055,64 +2054,7 @@ export class VectorEditor {
     }
   }
 
-  // ── Notify ────────────────────────────────────────────────────
-
-  private buildElementProperties(el: SVGGraphicsElement): ElementProperties {
-    const els = this.getSelectedEls();
-    const tBox = this.getUnionBBox(els);
-    const tag = el ? el.tagName.toLowerCase() : 'group';
-    const matrix = el.transform?.baseVal.consolidate()?.matrix;
-    let rotation = 0;
-    if (matrix) rotation = Math.round(Math.atan2(matrix.b, matrix.a) * 180 / Math.PI * 100) / 100;
-    const opacity = Math.round(parseFloat(el.getAttribute('opacity') || '1') * 100);
-    const strokeColor = el.getAttribute('stroke') || '#000000';
-    const strokeW = parseFloat(el.getAttribute('stroke-width') || '1');
-    const strokeCap = el.getAttribute('stroke-linecap') || 'butt';
-    const strokeJoin = el.getAttribute('stroke-linejoin') || 'miter';
-    const strokeOpacity = Math.round(parseFloat(el.getAttribute('stroke-opacity') || '1') * 100);
-    const fill = el.getAttribute('fill') || 'none';
-    const fillEnabled = fill !== 'none' && fill !== '';
-    const fillColor = fillEnabled ? fill : '#000000';
-    const fillOpacity = Math.round(parseFloat(el.getAttribute('fill-opacity') || '1') * 100);
-    const fillRule = el.getAttribute('fill-rule') || 'nonzero';
-    return {
-      x: tBox.x, y: tBox.y, w: tBox.width, h: tBox.height,
-      rotation, opacity, strokeColor, strokeW, strokeCap, strokeJoin, strokeOpacity,
-      fillEnabled, fillColor, fillOpacity, fillRule,
-      elementType: tag.toUpperCase(),
-    };
-  }
-
-  getElementProperties(id: string | null): ElementProperties | null {
-    if (!id) return null;
-    const mainSvg = this.container.querySelector('svg');
-    if (!mainSvg) return null;
-    const el = mainSvg.querySelector(`[data-xcs-id="${id}"]`) as SVGGraphicsElement | null;
-    if (!el) return null;
-    return this.buildElementProperties(el);
-  }
-
-  getMultiSelectionProperties(): ElementProperties | null {
-    const els = this.getSelectedEls();
-    if (els.length === 0) return null;
-    if (els.length === 1) return this.buildElementProperties(els[0]);
-    const tBox = this.getUnionBBox(els);
-    // Merge: average numeric props, use first element's string props
-    const first = els[0];
-    const opacity = Math.round(els.reduce((s, e) => s + parseFloat(e.getAttribute('opacity') || '1'), 0) / els.length * 100);
-    const strokeW = els.reduce((s, e) => s + parseFloat(e.getAttribute('stroke-width') || '1'), 0) / els.length;
-    const fill = first.getAttribute('fill') || 'none';
-    const fillEnabled = fill !== 'none' && fill !== '';
-    return {
-      x: tBox.x, y: tBox.y, w: tBox.width, h: tBox.height,
-      rotation: 0, opacity, strokeColor: first.getAttribute('stroke') || '#000000',
-      strokeW, strokeCap: first.getAttribute('stroke-linecap') || 'butt',
-      strokeJoin: first.getAttribute('stroke-linejoin') || 'miter', strokeOpacity: 100,
-      fillEnabled, fillColor: fillEnabled ? fill : '#000000', fillOpacity: 100,
-      fillRule: first.getAttribute('fill-rule') || 'nonzero',
-      elementType: 'GROUP',
-    };
-  }
+  // ΓöÇΓöÇ Notify ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   private notifyChange(el: SVGGraphicsElement) {
     if (!el && this.selectedIds.size === 0) {
@@ -2161,7 +2103,7 @@ export class VectorEditor {
     });
   }
 
-  // ── Public: Update Properties ─────────────────────────────────
+  // ΓöÇΓöÇ Public: Update Properties ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   updateProperties(props: Partial<ElementProperties>) {
     const els = this.getSelectedEls();
@@ -2258,7 +2200,7 @@ export class VectorEditor {
     this.notifyChange(els[0] || null);
   }
 
-  // ── Z-Order ───────────────────────────────────────────────────
+  // ΓöÇΓöÇ Z-Order ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   bringToFront() {
     const el = this.getSelectedEl();
@@ -2316,7 +2258,7 @@ export class VectorEditor {
     this.onInteractionEnd();
   }
 
-  // ── Align ─────────────────────────────────────────────────────
+  // ΓöÇΓöÇ Align ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   alignTo(mode: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom') {
     const els = this.getSelectedEls();
@@ -2349,7 +2291,7 @@ export class VectorEditor {
     this.commit();
   }
 
-  // ── Commit / Snapshot ─────────────────────────────────────────
+  // ΓöÇΓöÇ Commit / Snapshot ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
   private commit() {
     if (!this.currentLayer) return;

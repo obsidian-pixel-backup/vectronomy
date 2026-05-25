@@ -11,7 +11,7 @@ import type { ConvertedLayer } from './engine/types';
 import Panzoom, { PanzoomObject } from '@panzoom/panzoom';
 import { VectorEditor } from './engine/editor';
 import type { ElementProperties } from './engine/editor';
-import { runLandingTour, runEditorTour, toggleHelpPanel } from './onboarding';
+import { runLandingTour, runEditorTour } from './onboarding';
 
 // Import roadmap asset and parser
 import roadmapMd from '../VECTRONOMY_ROADMAP_AND_DOCUMENTATION.md?raw';
@@ -26,6 +26,7 @@ import { GridManager } from './managers/GridManager';
 
 // ── DOM ─────────────────────────────────────────────────────────
 
+const landingPage     = document.getElementById('landing-page') as HTMLElement;
 const dropZone        = document.getElementById('drop-zone') as HTMLElement;
 const dropContent     = dropZone.querySelector('.drop-zone-content') as HTMLElement;
 const dropProcessing  = dropZone.querySelector('.drop-zone-processing') as HTMLElement;
@@ -38,7 +39,7 @@ const statsEl         = document.getElementById('conversion-stats') as HTMLEleme
 const zoomDisplay     = document.getElementById('zoom-level-display') as HTMLElement;
 
 // Header containers
-const headerFileActions    = document.getElementById('header-file-actions') as HTMLElement;
+// headerFileActions removed
 const headerStudioActions  = document.getElementById('header-studio-actions') as HTMLElement;
 const headerLayerTabs      = document.getElementById('header-layer-tabs-container') as HTMLElement;
 
@@ -68,27 +69,83 @@ const propFillHex     = document.getElementById('prop-fill-color-hex') as HTMLIn
 const propFillOp      = document.getElementById('prop-fill-opacity') as HTMLInputElement;
 const propFillRule    = document.getElementById('prop-fill-rule') as HTMLSelectElement;
 
+// Help Route
+const helpRoute       = document.getElementById('help-route') as HTMLElement;
+const btnCloseHelp    = document.getElementById('btn-close-help') as HTMLButtonElement;
+const helpNavItems    = document.querySelectorAll('.help-nav-item');
+const helpArticles    = document.querySelectorAll('.help-article');
+const btnTourLanding  = document.getElementById('help-run-tour-landing') as HTMLButtonElement;
+const btnTourEditor   = document.getElementById('help-run-tour-editor') as HTMLButtonElement;
+
 // ── State ────────────────────────────────────────────────────────
 
 let convertedLayers: ConvertedLayer[] = [];
 let activeLayerIndex = 0;
 let panzoom: PanzoomObject | null = null;
 let editor: VectorEditor | null = null;
+let currentProjectId: string | null = null;
 let undoHistory: string[] = [];
 let redoHistory: string[] = [];
+
+// Managers
+let uiManager: UIManager;
+let storageManager: StorageManager;
+let projectManager: ProjectManager;
+let gridManager: GridManager;
 const MAX_HISTORY = 30;
 let suppressPropUpdates = false;
 
 // ── File Import ──────────────────────────────────────────────────
 
-// Header buttons
-// Header buttons
-document.getElementById('btn-import-xcs')!.addEventListener('click', () => fileInputXcs.click());
-document.getElementById('btn-import-svg')!.addEventListener('click', () => fileInputSvg.click());
-document.getElementById('btn-import-png')?.addEventListener('click', () => fileInputSvg.click());
-document.getElementById('btn-import-jpeg')?.addEventListener('click', () => fileInputSvg.click());
-document.getElementById('btn-new-canvas')!.addEventListener('click', () => openBlankCanvas());
-document.getElementById('btn-help')!.addEventListener('click', () => toggleHelpPanel());
+// Header buttons removed
+document.getElementById('btn-help')!.addEventListener('click', () => showHelpRoute());
+
+// Help Route Bindings
+btnCloseHelp?.addEventListener('click', () => {
+  helpRoute.setAttribute('hidden', '');
+  if (convertedLayers.length > 0 || editor) {
+    studio.removeAttribute('hidden');
+    // Ensure panzoom resizes properly after unhiding
+    if (panzoom) requestAnimationFrame(() => panzoom!.pan(panzoom!.getPan().x, panzoom!.getPan().y));
+  } else {
+    landingPage.removeAttribute('hidden');
+    dropZone.removeAttribute('hidden');
+  }
+});
+
+helpNavItems.forEach(btn => {
+  btn.addEventListener('click', () => {
+    helpNavItems.forEach(b => b.classList.remove('active'));
+    helpArticles.forEach(a => a.classList.remove('active'));
+    setTimeout(() => helpArticles.forEach(a => {
+      if (a.id !== btn.getAttribute('data-target')) a.setAttribute('hidden', '');
+    }), 300); // Wait for fade out
+    
+    btn.classList.add('active');
+    const target = document.getElementById(btn.getAttribute('data-target') || '');
+    if (target) {
+      target.removeAttribute('hidden');
+      requestAnimationFrame(() => target.classList.add('active'));
+    }
+  });
+});
+
+btnTourLanding?.addEventListener('click', () => {
+  btnCloseHelp.click();
+  setTimeout(() => runLandingTour(true), 300);
+});
+
+btnTourEditor?.addEventListener('click', () => {
+  btnCloseHelp.click();
+  setTimeout(() => runEditorTour(true), 300);
+});
+
+function showHelpRoute() {
+  dropZone.setAttribute('hidden', '');
+  landingPage.setAttribute('hidden', '');
+  studio.setAttribute('hidden', '');
+  helpRoute.removeAttribute('hidden');
+}
 
 // Drop zone buttons
 document.getElementById('btn-browse-xcs')!.addEventListener('click', (e) => { e.stopPropagation(); fileInputXcs.click(); });
@@ -96,7 +153,15 @@ document.getElementById('btn-browse-svg')!.addEventListener('click', (e) => { e.
 document.getElementById('btn-new-canvas-drop')!.addEventListener('click', (e) => { e.stopPropagation(); openBlankCanvas(); });
 
 fileInputXcs.addEventListener('change', () => {
-  if (fileInputXcs.files?.length) processXcsFile(fileInputXcs.files[0]);
+  if (fileInputXcs.files?.length) {
+    const file = fileInputXcs.files[0];
+    const nameLower = file.name.toLowerCase();
+    if (nameLower.endsWith('.vectronomy')) {
+      processVectronomyProject(file);
+    } else {
+      processXcsFile(file);
+    }
+  }
 });
 fileInputSvg.addEventListener('change', () => {
   if (fileInputSvg.files?.length) {
@@ -124,6 +189,8 @@ dropZone.addEventListener('drop', (e) => {
   const nameLower = file.name.toLowerCase();
   if (nameLower.endsWith('.svg')) {
     processSvgFile(file);
+  } else if (nameLower.endsWith('.vectronomy')) {
+    processVectronomyProject(file);
   } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
     processImageFile(file);
   } else {
@@ -162,7 +229,9 @@ previewContainer.addEventListener('drop', (e) => {
       processImageFile(file, canvasPt);
     } else {
       if (confirm(`Do you want to open ${file.name} as a new design project? This will discard your current unsaved edits.`)) {
-        if (nameLower.endsWith('.xcs') || nameLower.endsWith('.zip') || nameLower.endsWith('.json')) {
+        if (nameLower.endsWith('.vectronomy')) {
+          processVectronomyProject(file);
+        } else if (nameLower.endsWith('.xcs') || nameLower.endsWith('.zip') || nameLower.endsWith('.json')) {
           processXcsFile(file);
         } else {
           processSvgFile(file);
@@ -173,6 +242,27 @@ previewContainer.addEventListener('drop', (e) => {
 });
 
 // ── Conversion ────────────────────────────────────────────────────
+
+async function processVectronomyProject(file: File) {
+  showProcessing(true, 'Loading project…');
+  try {
+    const t0 = performance.now();
+    const layers = await projectManager.importProject(file);
+    if (!layers || layers.length === 0) throw new Error('No valid vector layers found in project.');
+    
+    convertedLayers = layers;
+    currentProjectId = null;
+    
+    // Telemetry
+    (window as any).va?.('event', { name: 'import_vectronomy', data: { fileName: file.name } });
+
+    showStudio(performance.now() - t0, file.name);
+  } catch (err: any) {
+    showProcessing(false);
+    showToast(`Error: ${err.message || 'Project load failed'}`, true);
+    console.error(err);
+  }
+}
 
 async function processXcsFile(file: File) {
   showProcessing(true, 'Parsing XCS structure…');
@@ -186,6 +276,7 @@ async function processXcsFile(file: File) {
     convertedLayers = await XcsConverter.convertFile(file, options);
     if (!convertedLayers.length) throw new Error('No vector layers found in the file.');
     setStatus('Rendering SVG…');
+    currentProjectId = null;
     
     // Telemetry
     (window as any).va?.('event', { name: 'import_xcs', data: { fileName: file.name } });
@@ -234,6 +325,8 @@ async function processSvgFile(file: File) {
 
     // Serialize enriched SVG back to a clean string
     const enrichedSvg = new XMLSerializer().serializeToString(doc);
+
+    currentProjectId = null;
 
     // Telemetry
     (window as any).va?.('event', { name: 'import_svg', data: { fileName: file.name } });
@@ -421,6 +514,7 @@ function openBlankCanvas() {
   convertedLayers = [{
     id: 'blank', name: 'Canvas', color: '#00ffc2', svg: blankSvg, elementCount: 0,
   }];
+  currentProjectId = null;
 
   // Telemetry
   (window as any).va?.('event', { name: 'open_blank_canvas' });
@@ -439,9 +533,9 @@ function setStatus(msg: string) { processingStatus.textContent = msg; }
 
 function showStudio(durationMs: number, fileName: string) {
   showProcessing(false);
+  landingPage.hidden = true;
   dropZone.hidden = true;
   studio.hidden = false;
-  headerFileActions.style.display = 'none';
   headerStudioActions.style.display = 'flex';
   headerLayerTabs.style.display = 'flex';
   activeLayerIndex = 0;
@@ -857,6 +951,12 @@ function fitSvgToView(svgEl: SVGSVGElement) {
   const cW = container.clientWidth;
   const cH = container.clientHeight;
 
+  if (cW === 0 || cH === 0) {
+    // Layout hasn't occurred yet, retry next frame
+    requestAnimationFrame(() => fitSvgToView(svgEl));
+    return;
+  }
+
   const bbox = viewport.getBBox();
   let svgW = bbox.width;
   let svgH = bbox.height;
@@ -997,6 +1097,10 @@ function exportAsFormat(format: string) {
       document.body.removeChild(ta);
       showToast('SVG source copied to clipboard');
     });
+  } else if (format === 'all-layers') {
+    (window as any).va?.('event', { name: 'export_svg', data: { count: convertedLayers.length, type: 'all' } });
+    convertedLayers.forEach(l => dlSvg(getExportableSvg(l.svg), `${sanitize(l.name)}.svg`));
+    showToast(`Downloaded ${convertedLayers.length} SVG files`);
   } else if (format === 'png' || format === 'jpeg') {
     const img = new Image();
     const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
@@ -1095,6 +1199,30 @@ if (exportToggle && exportDropdown) {
   });
 }
 
+// ── Sidebar Menu (Hamburger) ──────────────────────────────────
+const btnHamburger = document.getElementById('btn-hamburger');
+const sidebar = document.getElementById('app-sidebar');
+const sidebarOverlay = document.getElementById('sidebar-overlay');
+const btnSidebarClose = document.getElementById('btn-sidebar-close');
+
+function openSidebar() {
+  if (sidebar && sidebarOverlay) {
+    sidebar.removeAttribute('hidden');
+    sidebarOverlay.removeAttribute('hidden');
+  }
+}
+
+function closeSidebar() {
+  if (sidebar && sidebarOverlay) {
+    sidebar.setAttribute('hidden', 'true');
+    sidebarOverlay.setAttribute('hidden', 'true');
+  }
+}
+
+if (btnHamburger) btnHamburger.addEventListener('click', openSidebar);
+if (btnSidebarClose) btnSidebarClose.addEventListener('click', closeSidebar);
+if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
+
 // ── Grid Settings Dropdown ───────────────────────────────────────
 const btnGridSettings = document.getElementById('btn-grid-settings');
 const gridSettingsMenu = document.getElementById('grid-settings-menu');
@@ -1109,6 +1237,21 @@ if (btnGridSettings && gridSettingsMenu) {
 
   document.addEventListener('click', () => {
     gridSettingsMenu.classList.remove('show');
+  });
+}
+
+// ── Properties Panel Collapse ────────────────────────────────────
+const btnPropCollapse = document.getElementById('btn-prop-collapse');
+const editorLayout = document.querySelector('.editor-layout');
+
+if (btnPropCollapse && editorLayout) {
+  btnPropCollapse.addEventListener('click', () => {
+    editorLayout.classList.toggle('props-collapsed');
+    
+    // Trigger window resize to ensure panzoom / canvas bounds update correctly
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'));
+    }, 310); // Wait for CSS transition to finish
   });
 }
 
@@ -1143,36 +1286,12 @@ if (importToggle && importDropdown) {
   });
 }
 
-document.getElementById('btn-download-all')!.addEventListener('click', () => {
-  // Telemetry
-  (window as any).va?.('event', { name: 'export_svg', data: { count: convertedLayers.length, type: 'all' } });
-  convertedLayers.forEach(l => dlSvg(getExportableSvg(l.svg), `${sanitize(l.name)}.svg`));
-  showToast(`Downloaded ${convertedLayers.length} SVG files`);
-});
 
-document.getElementById('btn-copy')!.addEventListener('click', async () => {
-  const layer = convertedLayers[activeLayerIndex];
-  if (!layer) return;
-  const exportable = getExportableSvg(layer.svg);
-  try {
-    // Telemetry
-    (window as any).va?.('event', { name: 'copy_svg_source', data: { layerName: layer.name } });
-    await navigator.clipboard.writeText(exportable);
-    showToast('SVG source copied to clipboard');
-  } catch {
-    const ta = document.createElement('textarea');
-    ta.value = exportable;
-    document.body.appendChild(ta); ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-    showToast('SVG source copied to clipboard');
-  }
-});
 
 document.getElementById('btn-reset')!.addEventListener('click', () => {
   convertedLayers = []; activeLayerIndex = 0;
-  studio.hidden = true; dropZone.hidden = false;
-  headerFileActions.style.display = 'flex';
+  studio.hidden = true; landingPage.hidden = false; dropZone.hidden = false;
+
   headerStudioActions.style.display = 'none';
   headerLayerTabs.style.display = 'none';
   fileInputXcs.value = ''; fileInputSvg.value = '';
@@ -1333,7 +1452,7 @@ function showToast(msg: string, isError = false) {
 const { divisions, phases } = parseRoadmap(roadmapMd);
 
 const roadmapPage      = document.getElementById('roadmap-page') as HTMLElement;
-const btnRoadmap       = document.getElementById('btn-roadmap') as HTMLElement;
+const btnRoadmap       = document.getElementById('btn-sidebar-roadmap') as HTMLElement;
 const btnRoadmapBack   = document.getElementById('btn-roadmap-back') as HTMLElement;
 const tabDivisions     = document.getElementById('tab-roadmap-divisions') as HTMLButtonElement;
 const tabPhases        = document.getElementById('tab-roadmap-phases') as HTMLButtonElement;
@@ -1433,11 +1552,12 @@ function openFeatureModal(feat: Feature, div: Division) {
 }
 
 // Route Navigation Triggers
-btnRoadmap.addEventListener('click', () => {
+btnRoadmap?.addEventListener('click', () => {
+  document.getElementById('btn-sidebar-close')?.click();
   window.location.hash = 'roadmap';
 });
 
-btnRoadmapBack.addEventListener('click', () => {
+btnRoadmapBack?.addEventListener('click', () => {
   window.location.hash = '';
 });
 
@@ -1689,7 +1809,10 @@ function renderPhasesTimeline() {
   
   phases.forEach(phase => {
     const node = document.createElement('div');
-    node.className = `phase-node${phase.id === 1 ? ' active' : ''}`;
+    let phaseClass = `phase-node`;
+    if (phase.inProgress) phaseClass += ' active';
+    if (phase.completed) phaseClass += ' completed';
+    node.className = phaseClass;
     
     const featTags = phase.features.map(fId => {
       return `<span class="phase-feature-tag" data-feature-id="${fId}">#${fId}</span>`;
@@ -1742,11 +1865,234 @@ searchRoadmap.addEventListener('input', () => {
   renderFeaturesList();
 });
 
+// ── Profiles UI Logic ─────────────────────────────────────────────
+function setupProfilesUI() {
+  const machineSelect = document.getElementById('setting-machine-select') as HTMLSelectElement;
+  const btnAddMachine = document.getElementById('btn-add-machine');
+  const machineFields = document.getElementById('machine-profile-fields');
+  const btnSaveMachine = document.getElementById('btn-save-machine');
+
+  const materialSelect = document.getElementById('setting-material-select') as HTMLSelectElement;
+  const btnAddMaterial = document.getElementById('btn-add-material');
+  const materialFields = document.getElementById('material-profile-fields');
+  const btnSaveMaterial = document.getElementById('btn-save-material');
+
+  let machineProfiles = storageManager.getMachineProfiles();
+  let materialProfiles = storageManager.getMaterialProfiles();
+
+  function renderMachineSelect() {
+    machineSelect.innerHTML = '<option value="">-- Select Machine --</option>';
+    machineProfiles.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      machineSelect.appendChild(opt);
+    });
+  }
+
+  function renderMaterialSelect() {
+    materialSelect.innerHTML = '<option value="">-- Select Material --</option>';
+    materialProfiles.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name;
+      materialSelect.appendChild(opt);
+    });
+  }
+
+  renderMachineSelect();
+  renderMaterialSelect();
+
+  btnAddMachine?.addEventListener('click', () => {
+    machineFields!.style.display = machineFields!.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  btnSaveMachine?.addEventListener('click', () => {
+    const name = (document.getElementById('machine-name') as HTMLInputElement).value;
+    const w = parseFloat((document.getElementById('machine-bed-w') as HTMLInputElement).value);
+    const h = parseFloat((document.getElementById('machine-bed-h') as HTMLInputElement).value);
+    const spot = parseFloat((document.getElementById('machine-spot') as HTMLInputElement).value);
+
+    if (name && w && h && spot) {
+      machineProfiles.push({ id: Date.now().toString(), name, bedWidth: w, bedHeight: h, laserSpotSize: spot });
+      storageManager.saveMachineProfiles(machineProfiles);
+      renderMachineSelect();
+      machineFields!.style.display = 'none';
+      (document.getElementById('machine-name') as HTMLInputElement).value = '';
+    }
+  });
+
+  btnAddMaterial?.addEventListener('click', () => {
+    materialFields!.style.display = materialFields!.style.display === 'none' ? 'flex' : 'none';
+  });
+
+  btnSaveMaterial?.addEventListener('click', () => {
+    const name = (document.getElementById('material-name') as HTMLInputElement).value;
+    const speed = parseFloat((document.getElementById('material-speed') as HTMLInputElement).value);
+    const power = parseFloat((document.getElementById('material-power') as HTMLInputElement).value);
+    const passes = parseInt((document.getElementById('material-passes') as HTMLInputElement).value);
+    const thick = parseFloat((document.getElementById('material-thick') as HTMLInputElement).value);
+
+    if (name && speed && power && passes && thick) {
+      materialProfiles.push({ id: Date.now().toString(), name, speed, power, passes, thickness: thick });
+      storageManager.saveMaterialProfiles(materialProfiles);
+      renderMaterialSelect();
+      materialFields!.style.display = 'none';
+      (document.getElementById('material-name') as HTMLInputElement).value = '';
+    }
+  });
+}
+
+// ── Projects Manager UI Logic ───────────────────────────────────────
+function setupProjectsManagerUI() {
+  const btnSaveCurrent = document.getElementById('btn-save-current-project');
+  const modalProjectsList = document.getElementById('projects-list');
+  const landingProjectsList = document.getElementById('landing-projects-list');
+
+  async function renderProjectsList() {
+    const containers: HTMLElement[] = [];
+    if (modalProjectsList) containers.push(modalProjectsList);
+    if (landingProjectsList) containers.push(landingProjectsList);
+
+    if (containers.length === 0) return;
+
+    containers.forEach(c => c.innerHTML = '<div style="color:var(--text-secondary);font-size:0.9rem;">Loading projects...</div>');
+    
+    try {
+      const projects = await storageManager.listProjects();
+      if (projects.length === 0) {
+        if (modalProjectsList) {
+          modalProjectsList.innerHTML = `
+            <div style="color:var(--text-secondary);font-size:0.9rem;padding:20px;text-align:center;background:var(--bg-primary);border-radius:var(--radius-md);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="32" height="32" style="margin-bottom:10px; opacity:0.5;">
+                <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/>
+              </svg>
+              <br>No saved projects yet. Open a canvas, create something awesome, and save it here!
+            </div>`;
+        }
+        if (landingProjectsList) {
+          landingProjectsList.innerHTML = `
+            <div style="color:var(--text-secondary);font-size:0.95rem;padding:20px;text-align:center;line-height:1.5;">
+              <p>It looks a bit empty here!</p>
+              <p style="margin-top:10px; color:var(--text-muted);">Start a new project by importing a design on the right, or jump straight into a blank canvas to get creating.</p>
+            </div>`;
+        }
+        return;
+      }
+      
+      containers.forEach(c => c.innerHTML = '');
+      
+      projects.forEach(p => {
+        const d = new Date(p.timestamp);
+        
+        containers.forEach(container => {
+          const el = document.createElement('div');
+          el.className = 'project-card';
+          el.innerHTML = `
+            <div class="project-card-info">
+              <span class="project-card-title">${p.name}</span>
+              <span class="project-card-date">Last modified: ${d.toLocaleString()}</span>
+            </div>
+            <div class="project-card-actions">
+              <button class="btn btn-secondary btn-sm btn-proj-load" data-id="${p.id}">Load</button>
+              <button class="btn btn-secondary btn-sm btn-proj-rename" data-id="${p.id}" data-name="${p.name}">Rename</button>
+              <button class="btn btn-secondary btn-sm btn-proj-delete" data-id="${p.id}" style="color:var(--danger); border-color:var(--danger-soft);">Delete</button>
+            </div>
+          `;
+          container.appendChild(el);
+        });
+      });
+
+      // Bind events globally
+      document.querySelectorAll('.btn-proj-load').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = (e.currentTarget as HTMLButtonElement).dataset.id;
+          if (id) {
+            const state = await storageManager.loadProject(id);
+            if (state) {
+              convertedLayers = JSON.parse(state);
+              currentProjectId = id;
+              showStudio(0, 'Loaded Project');
+              document.getElementById('btn-projects-close')?.click();
+              if (typeof showToast !== 'undefined') showToast('Project loaded successfully.');
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-proj-rename').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const btnEl = e.currentTarget as HTMLButtonElement;
+          const id = btnEl.dataset.id;
+          const oldName = btnEl.dataset.name;
+          if (id && oldName) {
+            const newName = prompt('Enter new project name:', oldName);
+            if (newName && newName.trim() !== '' && newName !== oldName) {
+              await storageManager.renameProject(id, newName.trim());
+              renderProjectsList();
+            }
+          }
+        });
+      });
+
+      document.querySelectorAll('.btn-proj-delete').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+          const id = (e.currentTarget as HTMLButtonElement).dataset.id;
+          if (id && confirm('Are you sure you want to delete this project?')) {
+            await storageManager.deleteProject(id);
+            if (currentProjectId === id) currentProjectId = null;
+            renderProjectsList();
+          }
+        });
+      });
+
+    } catch (e) {
+      console.error(e);
+      containers.forEach(c => c.innerHTML = '<div style="color:var(--danger);font-size:0.9rem;">Failed to load projects.</div>');
+    }
+  }
+
+  // Initial load
+  renderProjectsList();
+
+  // Re-render when modal opens
+  const btnProjects = document.getElementById('btn-sidebar-projects');
+  btnProjects?.addEventListener('click', () => {
+    renderProjectsList();
+  });
+
+  btnSaveCurrent?.addEventListener('click', async () => {
+    if (convertedLayers.length === 0) {
+      alert('Canvas is empty. Nothing to save.');
+      return;
+    }
+
+    let name = 'Untitled Project';
+    if (!currentProjectId) {
+      const input = prompt('Enter a name for this project:', 'My Project');
+      if (input === null) return; // Cancelled
+      name = input.trim() || 'Untitled Project';
+      currentProjectId = 'proj_' + Date.now();
+    } else {
+      // Find current name if we wanted to prompt, but for now we just overwrite
+      const projects = await storageManager.listProjects();
+      const p = projects.find(x => x.id === currentProjectId);
+      if (p) name = p.name;
+    }
+
+    try {
+      await storageManager.saveProject(currentProjectId, name, JSON.stringify(convertedLayers));
+      renderProjectsList();
+      if (typeof showToast !== 'undefined') showToast('Project saved successfully.');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save project.');
+    }
+  });
+}
+
 // ── Managers ──────────────────────────────────────────────────────
-let uiManager: UIManager;
-let storageManager: StorageManager;
-let projectManager: ProjectManager;
-let gridManager: GridManager;
+// Declarations moved to state block
 
 // ── Startup ───────────────────────────────────────────────────────
 
@@ -1756,6 +2102,9 @@ document.addEventListener('DOMContentLoaded', () => {
   storageManager = new StorageManager();
   projectManager = new ProjectManager();
   gridManager = new GridManager();
+
+  setupProfilesUI();
+  setupProjectsManagerUI();
 
   // Wire sidebar download project button
   const btnDownloadProject = document.getElementById('btn-sidebar-download');
@@ -1782,6 +2131,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
+
+  // Auto-Save Loop
+  setInterval(() => {
+    if (convertedLayers.length > 0) {
+      storageManager.saveWorkspace(JSON.stringify(convertedLayers));
+    }
+  }, 30000);
 
   // Wait for initial render, then trigger landing tour
   setTimeout(() => runLandingTour(), 500);

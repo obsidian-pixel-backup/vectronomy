@@ -20,6 +20,8 @@ export interface Phase {
   focus: string;
   features: number[];
   goal: string;
+  completed: boolean;
+  inProgress: boolean;
 }
 
 export function parseRoadmap(md: string) {
@@ -66,8 +68,8 @@ export function parseRoadmap(md: string) {
         continue;
       }
       
-      // Match e.g.: "1. **Feature Title**" or "111. **Interactive 2.5D Path Extruder**"
-      const featMatch = line.match(/^(\d+)\.\s+\*\*(.*?)\*\*/);
+      // Match e.g.: "1. **Feature Title**" or "111. ✅ **[SHIPPED] Interactive 2.5D Path Extruder**"
+      const featMatch = line.match(/^(\d+)\.\s+(?:.*?)\*\*(.*?)\*\*/);
       if (featMatch && currentDivision) {
         currentFeature = {
           id: parseInt(featMatch[1]),
@@ -89,7 +91,7 @@ export function parseRoadmap(md: string) {
       }
     } else {
       // Match e.g.: "### Phase 1: Project Management & User Interface (Weeks 1-3)"
-      const phaseMatch = line.match(/^###\s+Phase\s+(\d+):\s*(.*?)\s*\((Weeks\s+.*?)\)/i);
+      const phaseMatch = line.match(/^###.*?Phase\s+(\d+):\s*(.*?)\s*\((Weeks\s+.*?)\)/i);
       if (phaseMatch) {
         currentPhase = {
           id: parseInt(phaseMatch[1]),
@@ -97,7 +99,9 @@ export function parseRoadmap(md: string) {
           duration: phaseMatch[3].trim(),
           focus: '',
           features: [],
-          goal: ''
+          goal: '',
+          completed: line.includes('[COMPLETED]'),
+          inProgress: line.includes('[IN PROGRESS]')
         };
         phases.push(currentPhase);
         continue;

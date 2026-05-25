@@ -22,6 +22,12 @@ interface TourStep {
 
 const landingTourSteps: TourStep[] = [
   {
+    target: '#btn-hamburger',
+    title: 'App Menu & Settings',
+    content: 'Click the hamburger menu to access the Feature Roadmap, Settings, Hotkeys, and Documentation. Your central hub for application settings!',
+    position: 'bottom',
+  },
+  {
     target: '.header-brand',
     title: 'Welcome to Vectronomy!',
     content: 'Your professional-grade SVG vector editor & XCS conversion studio. Please note: This application is currently in active ALPHA stage and under heavy development. This guided tour will walk you through every feature. Let\'s get started!',
@@ -100,14 +106,20 @@ const editorTourSteps: TourStep[] = [
   },
   {
     target: '#tool-curves-toggle',
-    title: 'Drawing Pens (P)',
-    content: 'Click this button to open the Drawing Pens menu popover. Choose the Bezier Pen to build precise curves node-by-node, or the Freehand Pencil to sketch natural organic lines.',
+    title: 'Drawing Pens & Brushes (P/B)',
+    content: 'Click this button to open the Drawing Pens menu popover. Choose the Bezier Pen to build precise curves node-by-node, the Freehand Pencil to sketch natural lines, or the Vector Brush (B) to paint pressure-sensitive vector strokes.',
     position: 'right',
   },
   {
     target: '#tool-shapes-toggle',
     title: 'Geometric Shapes (S)',
     content: 'Click this button to open the Geometric Shapes menu popover. Instantly draw Line Segments, Polylines, Rectangles, Ellipses, Regular Polygons, Star Generators, or Logarithmic Spirals. Hold Shift while drawing to lock perfect aspect ratios!',
+    position: 'right',
+  },
+  {
+    target: '#tool-eraser',
+    title: 'Eraser & Magic Wand',
+    content: 'Advanced editing tools: Use the Eraser (E) to slice through and delete segments of paths, or the Magic Wand (W) to automatically select related geometric structures based on similarity.',
     position: 'right',
   },
   {
@@ -130,8 +142,8 @@ const editorTourSteps: TourStep[] = [
   },
   {
     target: '.preview-controls',
-    title: 'Zoom Controls',
-    content: 'Monitor your current zoom level here. Use Ctrl + scroll wheel for precision zooming, or the zoom buttons for stepped zoom control.',
+    title: 'Canvas & Grid Controls',
+    content: 'Control your workspace view here. Toggle the Grid, enable Grid Snapping (magnet icon), adjust grid sizes in settings, or use the zoom buttons to perfectly frame your design.',
     position: 'left',
   },
 ];
@@ -331,101 +343,6 @@ function showTourPrompt(title: string, message: string): Promise<boolean> {
   });
 }
 
-// ── Help Panel ───────────────────────────────────────────────────
-
-function createHelpPanel() {
-  const existing = document.getElementById('help-panel');
-  if (existing) { existing.remove(); return; } // Toggle off
-
-  const panel = document.createElement('div');
-  panel.id = 'help-panel';
-  panel.className = 'help-panel glass';
-  panel.innerHTML = `
-    <div class="help-panel-header">
-      <h3>Help & Tutorials</h3>
-      <button class="help-close-btn" id="help-close-btn">&times;</button>
-    </div>
-    <div class="help-panel-content">
-      <div class="help-section">
-        <h4>⌨ Keyboard Shortcuts</h4>
-        <div class="help-shortcuts">
-          <div class="shortcut"><kbd>V</kbd><span>Select Tool</span></div>
-          <div class="shortcut"><kbd>H</kbd><span>Pan Tool</span></div>
-          <div class="shortcut"><kbd>N</kbd><span>Node Editor</span></div>
-          <div class="shortcut"><kbd>R</kbd><span>Rectangle</span></div>
-          <div class="shortcut"><kbd>E</kbd><span>Ellipse</span></div>
-          <div class="shortcut"><kbd>L</kbd><span>Line</span></div>
-          <div class="shortcut"><kbd>P</kbd><span>Pen Tool</span></div>
-          <div class="shortcut"><kbd>Del</kbd><span>Delete Selection / Node</span></div>
-          <div class="shortcut"><kbd>Esc</kbd><span>Deselect All</span></div>
-          <div class="shortcut"><kbd>Shift+Click</kbd><span>Multi-Select</span></div>
-          <div class="shortcut"><kbd>Middle Mouse</kbd><span>Pan (any tool)</span></div>
-          <div class="shortcut"><kbd>Scroll</kbd><span>Zoom In/Out</span></div>
-        </div>
-      </div>
-
-      <div class="help-section">
-        <h4>🖱 Node Editing</h4>
-        <ul>
-          <li>Switch to <strong>Node tool (N)</strong> and click any path or shape</li>
-          <li>Drag white nodes to reshape geometry</li>
-          <li><strong>Double-click</strong> on a path stroke to add a new node</li>
-          <li>Click a node then press <strong>Delete</strong> to remove it</li>
-          <li>Works on XCS imports, drawn shapes, and SVG paths</li>
-        </ul>
-      </div>
-
-      <div class="help-section">
-        <h4>🔲 Multi-Selection</h4>
-        <ul>
-          <li>Click and drag on empty canvas to create a marquee selection</li>
-          <li>Hold <strong>Shift</strong> and click to add/remove from selection</li>
-          <li>Selected elements can be moved, resized, and styled together</li>
-        </ul>
-      </div>
-
-      <div class="help-section">
-        <h4>📤 Exporting</h4>
-        <ul>
-          <li>Studio cyan colors are auto-converted to black on export</li>
-          <li>Export single layers or all layers at once</li>
-          <li>Production-ready SVG output for laser cutting</li>
-        </ul>
-      </div>
-
-      <div class="help-section help-tour-section">
-        <h4>🎓 Guided Tour</h4>
-        <p>Want to see the full walkthrough again?</p>
-        <button class="btn btn-primary btn-sm" id="help-restart-tour">Restart Onboarding Tour</button>
-      </div>
-    </div>
-  `;
-  document.body.appendChild(panel);
-  requestAnimationFrame(() => panel.classList.add('visible'));
-
-  document.getElementById('help-close-btn')!.addEventListener('click', () => {
-    panel.classList.remove('visible');
-    setTimeout(() => panel.remove(), 300);
-  });
-
-  document.getElementById('help-restart-tour')!.addEventListener('click', () => {
-    panel.classList.remove('visible');
-    setTimeout(() => {
-      panel.remove();
-      // Reset onboarding states
-      localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem(STORAGE_KEY_EDITOR);
-      // Determine which tour to run based on current view
-      const studio = document.getElementById('studio');
-      if (studio && !studio.hidden) {
-        runEditorTour(true);
-      } else {
-        runLandingTour(true);
-      }
-    }, 300);
-  });
-}
-
 // ── Public API ───────────────────────────────────────────────────
 
 const engine = new TourEngine();
@@ -473,8 +390,4 @@ export async function runEditorTour(force = false) {
   } else {
     localStorage.setItem(STORAGE_KEY_EDITOR, 'true');
   }
-}
-
-export function toggleHelpPanel() {
-  createHelpPanel();
 }

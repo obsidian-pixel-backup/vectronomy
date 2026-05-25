@@ -83,6 +83,7 @@ export class UIManager {
   private initModals() {
     const btnSettings = document.getElementById('btn-sidebar-settings');
     const btnHotkeys = document.getElementById('btn-sidebar-hotkeys');
+    const btnProjects = document.getElementById('btn-sidebar-projects');
     
     btnSettings?.addEventListener('click', () => {
       document.getElementById('btn-sidebar-close')?.click();
@@ -94,11 +95,19 @@ export class UIManager {
       this.showModal('modal-hotkeys');
     });
 
+    btnProjects?.addEventListener('click', () => {
+      document.getElementById('btn-sidebar-close')?.click();
+      this.showModal('modal-projects');
+    });
+
     document.getElementById('btn-settings-close')?.addEventListener('click', () => {
       this.hideModal('modal-settings');
     });
     document.getElementById('btn-hotkeys-close')?.addEventListener('click', () => {
       this.hideModal('modal-hotkeys');
+    });
+    document.getElementById('btn-projects-close')?.addEventListener('click', () => {
+      this.hideModal('modal-projects');
     });
   }
 

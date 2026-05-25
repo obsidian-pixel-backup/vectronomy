@@ -32,13 +32,13 @@
   <!-- Google Fonts Preconnect -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
   <!-- Structured Data (JSON-LD Rich Snippet) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
-    "@type": "WebApplication",
+    "@type": ["WebApplication", "SoftwareApplication"],
     "name": "Vectronomy",
     "alternateName": "VECTRONOMY Vector Studio",
     "url": "https://vectronomy.vercel.app/",
@@ -48,6 +48,11 @@
     "operatingSystem": "All",
     "browserRequirements": "Requires HTML5, Canvas, and SVG support.",
     "license": "https://opensource.org/licenses/MIT",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
     "featureList": [
       "XCS project to SVG conversion",
       "Interactive bezier pen drawing tool",
@@ -62,165 +67,180 @@
 
   <!-- Vercel Web Analytics & Speed Insights -->
   <script>
-    window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
-    const vaScript = document.createElement('script');
-    vaScript.src = '/_vercel/insights/script.js';
-    vaScript.defer = true;
-    document.head.appendChild(vaScript);
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+      const vaScript = document.createElement('script');
+      vaScript.src = '/_vercel/insights/script.js';
+      vaScript.defer = true;
+      document.head.appendChild(vaScript);
 
-    window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
-    const siScript = document.createElement('script');
-    siScript.src = '/_vercel/speed-insights/script.js';
-    siScript.defer = true;
-    document.head.appendChild(siScript);
+      window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
+      const siScript = document.createElement('script');
+      siScript.src = '/_vercel/speed-insights/script.js';
+      siScript.defer = true;
+      document.head.appendChild(siScript);
+    }
+
+    // Initial theme check to avoid flash of wrong color
+    const savedTheme = localStorage.getItem('vectronomy-theme');
+    if (savedTheme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else if (savedTheme === 'system') {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches === false) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    }
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          registration.unregister();
+        }
+      });
+    }
   </script>
-  <script type="module" crossorigin src="./assets/index-tlDvr6ui.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-fOIfe31T.css">
+  <script type="module" crossorigin src="./assets/index-2ySWdiWp.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-C2gWNdiU.css">
 </head>
 <body>
+  <!-- Visually hidden H1 for SEO -->
+  <h1 style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0;">Vectronomy — Free Online SVG Creator & XCS Converter</h1>
+  
+  <noscript>
+    <div style="padding: 20px; background: #09090f; color: #fff; text-align: center; font-family: sans-serif;">
+      <p><strong>Vectronomy</strong> is a free, high-performance client-side XCS to SVG converter and vector editing studio for laser cutting and CNC. Please enable JavaScript to use this application.</p>
+    </div>
+  </noscript>
+
   <div id="app">
 
     <!-- ── App Header ──────────────────────────────────────────── -->
     <header id="app-header">
       <div class="header-brand">
-        <div class="brand-icon">
-          <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
-            <path d="M16 8L22 11.5V18.5L16 22L10 18.5V11.5L16 8Z" stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.6"/>
-            <circle cx="16" cy="15" r="2.5" fill="currentColor" opacity="0.8"/>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <h1>VECTRONOMY <span class="brand-beta">(Alpha v0.02.2026)</span></h1>
-        </div>
-        <button id="btn-roadmap" class="btn btn-ghost btn-sm" title="Vectronomy Feature Roadmap" style="margin-left: 8px; border: 1px dashed var(--border-accent); color: var(--accent); gap: 4px; padding: 4px 10px; height: 26px; font-size: 0.72rem; background: var(--accent-soft);">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 12px; height: 12px; stroke: var(--accent);"><polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/></svg>
-          Roadmap
+        <button id="btn-hamburger" class="btn-icon" title="Menu" aria-label="Menu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <button id="btn-help" title="Help & Tutorials" aria-label="Help & Tutorials">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </button>
+        <button id="btn-theme-toggle" title="Toggle Theme" class="btn-icon" aria-label="Toggle Theme">
+          <!-- SVG will be updated via JS based on state -->
+          <svg id="icon-theme-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         </button>
       </div>
 
       <nav class="header-nav">
-        <div class="import-dropdown-container">
-          <button id="btn-import-toggle" class="btn btn-primary btn-sm" title="Import or Open Design File">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 13px; height: 13px; margin-right: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            <span>Import / Open</span>
-            <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px; margin-left: 4px; transition: transform var(--transition-fast);"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="import-dropdown-menu glass" id="import-dropdown">
-            <button class="import-item" id="btn-import-xcs" title="Import XCS, JSON, or ZIP format">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-              <span>Import XCS (.xcs)</span>
-            </button>
-            <button class="import-item" id="btn-import-svg" title="Open Vector SVG format">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-              <span>Open SVG (.svg)</span>
-            </button>
-            <button class="import-item" id="btn-import-png" title="Import PNG raster image">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-              <span>Import PNG (.png)</span>
-            </button>
-            <button class="import-item" id="btn-import-jpeg" title="Import JPEG raster image">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-              <span>Import JPEG (.jpg)</span>
-            </button>
-          </div>
+        <!-- Default File Actions Removed -->
+
+
+        <!-- Studio Layer Tabs (Centered in header or left aligned next to hamburger) -->
+        <div id="header-layer-tabs-container" style="display: none; align-items: center; margin-right: auto; margin-left: 12px; flex: 1;">
+          <div id="layer-tabs" class="layer-tabs"></div>
         </div>
-        <button id="btn-new-canvas" class="btn btn-ghost btn-sm" style="border: 1px dashed var(--border-accent); color: var(--accent); gap: 4px; padding: 4px 10px; height: 26px; font-size: 0.72rem; background: var(--accent-soft); margin-right: 4px;">
-          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          New Canvas
-        </button>
-        <button id="btn-help" title="Help & Tutorials">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-        </button>
+
+        <!-- Studio Specific Actions -->
+        <div id="header-studio-actions" style="display: none; align-items: center; gap: 8px;">
+          <div id="conversion-stats" class="conversion-stats" aria-live="polite"></div>
+          <div class="export-dropdown-container">
+            <button id="btn-export-toggle" class="btn btn-primary btn-sm" title="Export Design File">
+              <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+              <span>Export SVG / Image</span>
+              <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px; margin-left: 4px; transition: transform var(--transition-fast);"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="export-dropdown-menu glass" id="export-dropdown">
+              <button class="export-item" data-format="svg" title="Export Vector SVG file">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                <span>Vector SVG (.svg)</span>
+              </button>
+              <button class="export-item" data-format="png" title="Export Raster PNG image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span>Raster PNG (.png)</span>
+              </button>
+              <button class="export-item" data-format="jpeg" title="Export Raster JPEG image">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                <span>Raster JPEG (.jpg)</span>
+              </button>
+              <div class="export-menu-divider"></div>
+              <button class="export-item" data-format="source" title="Export raw SVG code as text file">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                <span>Source Text (.txt)</span>
+              </button>
+              <button class="export-item" data-format="copy" title="Copy SVG code to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                <span>Copy Source</span>
+              </button>
+              <div class="export-menu-divider"></div>
+              <button class="export-item" data-format="all-layers" title="Export all layers as separate SVG files">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                <span>All Layers (.zip/.svgs)</span>
+              </button>
+            </div>
+          </div>
+          <button id="btn-reset" class="btn btn-ghost btn-sm">
+            <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            Close
+          </button>
+        </div>
+
       </nav>
 
+
       <!-- Hidden file inputs -->
-      <input type="file" id="file-input-xcs" accept=".xcs,.json,.zip" hidden />
+      <input type="file" id="file-input-xcs" accept=".xcs,.json,.zip,.vectronomy" hidden />
       <input type="file" id="file-input-svg" accept=".svg,.png,.jpg,.jpeg" hidden />
     </header>
 
     <!-- ── Main Content ────────────────────────────────────────── -->
     <main id="app-main">
 
-      <!-- ── Drop Zone (shown until file loaded) ────────────────── -->
-      <section id="drop-zone" class="drop-zone">
-        <div class="drop-zone-content">
-          <div class="drop-icon-wrap">
-            <svg class="drop-icon" viewBox="0 0 80 80" fill="none">
-              <rect x="10" y="10" width="60" height="60" rx="8" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4"/>
-              <path d="M40 25V55M25 40H55" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-            </svg>
+      <!-- ── Landing Page (shown until file loaded) ────────────────── -->
+      <section id="landing-page" class="landing-page">
+        
+        <!-- Left: Project Management -->
+        <div class="landing-projects glass">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 class="landing-title" style="margin: 0; font-size: 1.1rem; color: var(--text-primary);">Recent Projects</h2>
           </div>
-          <h2 class="drop-title">Drop your XCS project or SVG design file here</h2>
-          <p class="drop-subtitle">Supports <span class="tag">.xcs</span> <span class="tag">.json</span> <span class="tag">.zip</span> <span class="tag">.svg</span></p>
-          <div class="drop-actions">
-            <button id="btn-browse-xcs" class="btn btn-primary">Import XCS / JSON</button>
-            <button id="btn-browse-svg" class="btn btn-secondary">Open SVG File</button>
-            <button id="btn-new-canvas-drop" class="btn btn-ghost" style="border: 1px dashed var(--border-accent); color: var(--accent); background: var(--accent-soft);">Blank Canvas</button>
+          <div id="landing-projects-list" class="projects-list-container">
+            <!-- Dynamically populated via JS -->
           </div>
         </div>
-        <div class="drop-zone-processing" hidden>
-          <div class="spinner-ring"></div>
-          <p>Analysing &amp; converting…</p>
-          <p class="processing-sub" id="processing-status">Parsing file structure</p>
-        </div>
+
+        <!-- Right: Drop Zone -->
+        <section id="drop-zone" class="drop-zone">
+          <div class="drop-zone-content">
+            <div class="drop-icon-wrap">
+              <svg class="drop-icon" viewBox="0 0 80 80" fill="none">
+                <rect x="10" y="10" width="60" height="60" rx="8" stroke="currentColor" stroke-width="1.5" stroke-dasharray="5 4"/>
+                <path d="M40 25V55M25 40H55" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <h2 class="drop-title">Drop your XCS project or SVG design file here</h2>
+            <p class="drop-subtitle">Supports <span class="tag">.xcs</span> <span class="tag">.json</span> <span class="tag">.zip</span> <span class="tag">.svg</span> <span class="tag">.vectronomy</span></p>
+            <div class="drop-actions">
+              <button id="btn-browse-xcs" class="btn btn-primary">Import Project</button>
+              <button id="btn-browse-svg" class="btn btn-secondary">Open SVG File</button>
+              <button id="btn-new-canvas-drop" class="btn btn-ghost" style="border: 1px dashed var(--border-accent); color: var(--accent); background: var(--accent-soft);">Blank Canvas</button>
+            </div>
+          </div>
+          <div class="drop-zone-processing" hidden>
+            <div class="spinner-ring"></div>
+            <p>Analysing &amp; converting…</p>
+            <p class="processing-sub" id="processing-status">Parsing file structure</p>
+          </div>
+        </section>
+
       </section>
 
       <!-- ── Studio (shown after file loaded) ───────────────────── -->
       <section id="studio" class="studio" hidden>
-
-        <!-- ── Top Bar ──────────────────────────────────────────── -->
-        <div class="studio-topbar">
-          <div class="topbar-left">
-            <div id="layer-tabs" class="layer-tabs"></div>
-          </div>
-          <div class="topbar-right">
-            <div id="conversion-stats" class="conversion-stats" aria-live="polite"></div>
-            <div class="export-dropdown-container">
-              <button id="btn-export-toggle" class="btn btn-primary btn-sm" title="Export Design File">
-                <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                <span>Export SVG / Image</span>
-                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width: 10px; height: 10px; margin-left: 4px; transition: transform var(--transition-fast);"><polyline points="6 9 12 15 18 9"/></svg>
-              </button>
-              <div class="export-dropdown-menu glass" id="export-dropdown">
-                <button class="export-item" data-format="svg" title="Export Vector SVG file">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span>Vector SVG (.svg)</span>
-                </button>
-                <button class="export-item" data-format="png" title="Export Raster PNG image">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-                  <span>Raster PNG (.png)</span>
-                </button>
-                <button class="export-item" data-format="jpeg" title="Export Raster JPEG image">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
-                  <span>Raster JPEG (.jpg)</span>
-                </button>
-                <div class="export-menu-divider"></div>
-                <button class="export-item" data-format="source" title="Export raw SVG code as text file">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                  <span>Source Text (.txt)</span>
-                </button>
-                <button class="export-item" data-format="copy" title="Copy SVG code to clipboard">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                  <span>Copy SVG Code</span>
-                </button>
-              </div>
-            </div>
-            <button id="btn-download-all" class="btn btn-secondary btn-sm">All Layers</button>
-            <button id="btn-copy" class="btn btn-ghost btn-sm">Copy Source</button>
-            <button id="btn-reset" class="btn btn-ghost btn-sm">
-              <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-              Close
-            </button>
-          </div>
-        </div>
 
         <!-- ── Editor Layout ────────────────────────────────────── -->
         <div class="editor-layout">
 
           <!-- ── Left Tools Panel ──────────────────────────────── -->
           <aside class="tools-panel glass">
-            <h2 class="panel-header">Vector Tools</h2>
+
 
             <div class="tool-group">
               <button class="tool-btn" id="btn-undo" title="Undo (Ctrl+Z)">
@@ -262,6 +282,10 @@
                 <button class="shape-menu-item" data-tool="pencil" title="Freehand Pencil (K)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
                   <span>Pencil / Freehand</span>
+                </button>
+                <button class="shape-menu-item" data-tool="brush" title="Vector Brush (B)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/></svg>
+                  <span>Vector Brush</span>
                 </button>
               </div>
             </div>
@@ -317,6 +341,27 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><circle cx="6" cy="18" r="2"/><path d="M8 6h8M18 8v8M16 18H8M6 16V8"/></svg>
               </button>
             </div>
+
+            <div class="tool-divider"></div>
+            
+            <!-- Layout Tools (Figma style) -->
+            <div class="tool-group">
+              <button class="tool-btn" id="tool-frame" title="Frame / Artboard (F)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="M3 9h18M9 21V9"/></svg>
+              </button>
+            </div>
+
+            <div class="tool-divider"></div>
+
+            <!-- Raster Tools (Photoshop style) -->
+            <div class="tool-group">
+              <button class="tool-btn" id="tool-eraser" title="Eraser Tool (E)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20H7L3 16l9-9 8 8z"/><path d="M9 11l4 4"/></svg>
+              </button>
+              <button class="tool-btn" id="tool-magic-wand" title="Magic Wand (W)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3l-6 6"/><path d="M16.5 8.5l-3-3"/><path d="M3 21l6-6"/><path d="M8 12.5l3.5 3.5"/><path d="M15 15l1.5-1.5"/><path d="M9 9l1.5-1.5"/><path d="M11 5l.5-.5"/><path d="M5 11l-.5.5"/><path d="M19 13l.5-.5"/><path d="M13 19l-.5.5"/></svg>
+              </button>
+            </div>
           </aside>
 
           <!-- ── Center Workspace ──────────────────────────────── -->
@@ -324,6 +369,35 @@
             <div id="svg-preview" class="svg-preview">
               <!-- Zoom Controls -->
               <div class="preview-controls">
+                <button id="btn-toggle-grid" class="btn-icon" title="Toggle Grid (Ctrl+')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <line x1="3" y1="9" x2="21" y2="9"/>
+                    <line x1="3" y1="15" x2="21" y2="15"/>
+                    <line x1="9" y1="3" x2="9" y2="21"/>
+                    <line x1="15" y1="3" x2="15" y2="21"/>
+                  </svg>
+                </button>
+                <button id="btn-toggle-snap" class="btn-icon" title="Toggle Snap to Grid (Shift+')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14v-5a8 8 0 1 1 16 0v5"/><path d="M4 14h4v6H4z"/><path d="M16 14h4v6h-4z"/>
+                  </svg>
+                </button>
+                <div class="grid-settings-container">
+                  <button id="btn-grid-settings" class="btn-icon" title="Grid Settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                  </button>
+                  <div class="grid-settings-menu glass" id="grid-settings-menu">
+                    <div class="prop-row" style="align-items: center; justify-content: space-between;">
+                      <label for="setting-units" style="font-size: 0.75rem; color: var(--text-primary);">Units</label>
+                      <select id="setting-units" class="prop-select" style="width: 70px; padding: 2px 4px; font-size: 0.75rem;">
+                        <option value="mm">mm</option>
+                        <option value="in">inch</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div style="width: 16px; height: 1px; background: rgba(255,255,255,0.15); margin: 2px 0;"></div>
                 <button id="btn-zoom-in" class="btn-icon" title="Zoom In (+)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
                 </button>
@@ -347,8 +421,42 @@
 
           <!-- ── Right Properties Panel ────────────────────────── -->
           <aside id="properties-panel" class="properties-panel glass">
-            <h2 class="panel-header">Element Properties</h2>
-            <div class="panel-content">
+            <div class="properties-header panel-header">
+              <h2 class="panel-title" id="properties-title">Properties</h2>
+              <button id="btn-prop-collapse" class="btn-icon" title="Toggle Properties Panel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="13 17 18 12 13 7"></polyline><line x1="6" y1="17" x2="11" y2="12"></line><line x1="6" y1="7" x2="11" y2="12"></line></svg>
+              </button>
+            </div>
+            <div class="panel-content" id="properties-content">
+
+              <!-- Tool Options -->
+              <div id="props-tool-options" class="prop-section" style="display: none; border-bottom: 1px solid var(--glass-border); padding-bottom: 15px; margin-bottom: 15px;">
+                <div class="prop-section-title">Tool Options</div>
+                <div class="prop-row">
+                  <div class="prop-field" id="tool-opt-polygon-sides" style="display: none; width: 100%;">
+                    <label for="prop-polygon-sides" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Polygon Sides</label>
+                    <input type="number" id="prop-polygon-sides" value="5" min="3" step="1" style="width: 100%;" />
+                  </div>
+                  <div class="prop-field" id="tool-opt-star-points" style="display: none; width: 100%;">
+                    <label for="prop-star-points" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Star Points</label>
+                    <input type="number" id="prop-star-points" value="5" min="3" step="1" style="width: 100%;" />
+                  </div>
+                  <div class="prop-field" id="tool-opt-brush-size" style="display: none; width: 100%;">
+                    <label for="prop-brush-size" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Brush Size</label>
+                    <input type="number" id="prop-brush-size" value="12" min="1" step="1" style="width: 100%;" />
+                  </div>
+                </div>
+                <div class="prop-row" style="margin-top: 8px;">
+                  <div class="prop-field" id="tool-opt-brush-style" style="display: none; width: 100%;">
+                    <label for="prop-brush-style" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Brush Style</label>
+                    <select id="prop-brush-style" class="prop-select" style="width: 100%;">
+                      <option value="round">Round</option>
+                      <option value="calligraphic">Calligraphic</option>
+                      <option value="flat">Flat</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
 
               <!-- No Selection State -->
               <div id="props-empty" class="props-empty">
@@ -465,6 +573,25 @@
                   </div>
                 </div>
 
+                <!-- Pathfinder / Boolean Operations (Illustrator style) -->
+                <div class="prop-section" id="prop-section-pathfinder">
+                  <div class="prop-section-title">Pathfinder</div>
+                  <div class="align-grid" style="grid-template-columns: repeat(4, 1fr); gap: 4px;">
+                    <button class="align-btn" id="path-unite" title="Unite (Union)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 12h8v8h-8z"/></svg>
+                    </button>
+                    <button class="align-btn" id="path-subtract" title="Subtract (Minus Front)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 12h8v8h-8z" fill="var(--bg-glass)"/></svg>
+                    </button>
+                    <button class="align-btn" id="path-intersect" title="Intersect">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12h4v4h-4z"/></svg>
+                    </button>
+                    <button class="align-btn" id="path-exclude" title="Exclude">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 12h8v8h-8z"/><path d="M12 12h4v4h-4z" fill="var(--bg-glass)"/></svg>
+                    </button>
+                  </div>
+                </div>
+
                 <!-- Align & Distribute -->
                 <div class="prop-section">
                   <div class="prop-section-title">Align</div>
@@ -488,6 +615,30 @@
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="20" x2="20" y2="20"/><rect x="7" y="10" width="4" height="10" rx="1"/><rect x="13" y="6" width="4" height="14" rx="1"/></svg>
                     </button>
                   </div>
+                </div>
+
+                <!-- Image Adjustments (Photoshop style) -->
+                <div class="prop-section" id="prop-section-image" style="display: none;">
+                  <div class="prop-section-title">Image Adjustments</div>
+                  <div class="prop-row">
+                    <div class="input-field" style="width:100%; display:flex; flex-direction:column; gap:4px;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">Brightness</span>
+                      <input type="range" id="prop-brightness" min="-100" max="100" value="0" style="width:100%" />
+                    </div>
+                  </div>
+                  <div class="prop-row" style="margin-top: 8px;">
+                    <div class="input-field" style="width:100%; display:flex; flex-direction:column; gap:4px;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">Contrast</span>
+                      <input type="range" id="prop-contrast" min="-100" max="100" value="0" style="width:100%" />
+                    </div>
+                  </div>
+                  <div class="prop-row" style="margin-top: 8px;">
+                    <div class="input-field" style="width:100%; display:flex; flex-direction:column; gap:4px;">
+                      <span style="font-size:0.7rem; color:var(--text-muted);">Blur</span>
+                      <input type="range" id="prop-blur" min="0" max="50" value="0" style="width:100%" />
+                    </div>
+                  </div>
+                  <button id="btn-apply-filters" class="btn btn-secondary btn-sm" style="width:100%; margin-top: 12px;">Apply Filters</button>
                 </div>
 
                 <!-- Order -->
@@ -556,7 +707,282 @@
         </div>
 
       </section>
+
+      <!-- ── Help & Tutorials Route ──────────────────────────────── -->
+      <section id="help-route" class="help-route" hidden>
+        <aside class="help-sidebar glass">
+          <h2 class="panel-header">Documentation</h2>
+          <nav class="help-nav">
+            <button class="help-nav-item active" data-target="help-quickstart">Quick Start</button>
+            <button class="help-nav-item" data-target="help-shortcuts">Keyboard Shortcuts</button>
+            <button class="help-nav-item" data-target="help-tools">Vector Tools</button>
+            <button class="help-nav-item" data-target="help-export">Exporting & XCS</button>
+          </nav>
+        </aside>
+        
+        <div class="help-content-area glass">
+          <header class="help-header">
+            <h2>Vectronomy Documentation</h2>
+            <button id="btn-close-help" class="btn btn-primary btn-sm">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+              Back to Studio
+            </button>
+          </header>
+          
+          <div class="help-scroll-container">
+            <!-- Quick Start -->
+            <article id="help-quickstart" class="help-article active">
+              <h3>Quick Start & Guided Tours</h3>
+              <p>Welcome to Vectronomy. This studio allows you to build, import, and convert vector files easily. It's built for speed, running entirely in your browser with zero server uploads.</p>
+              
+              <div class="help-card">
+                <h4>Interactive Guided Tours</h4>
+                <p>If this is your first time here, our interactive guides will walk you through the interface.</p>
+                <div style="display: flex; gap: 10px; margin-top: 10px;">
+                  <button id="help-run-tour-landing" class="btn btn-secondary">Run Welcome Tour</button>
+                  <button id="help-run-tour-editor" class="btn btn-secondary">Run Editor Tour</button>
+                </div>
+              </div>
+
+              <h4>Core Workflows</h4>
+              <ul>
+                <li><strong>Importing:</strong> Drag and drop any <code>.xcs</code>, <code>.svg</code>, or <code>.zip</code> file onto the canvas to instantly open it.</li>
+                <li><strong>Selecting:</strong> Use the Select Tool (<kbd>V</kbd>) to grab elements. Hold <kbd>Shift</kbd> to select multiple elements.</li>
+                <li><strong>Properties:</strong> The right panel displays live context properties (position, stroke, fill) for whatever you select.</li>
+              </ul>
+            </article>
+
+            <!-- Keyboard Shortcuts -->
+            <article id="help-shortcuts" class="help-article" hidden>
+              <h3>Keyboard Shortcuts</h3>
+              <p>Master these hotkeys to drastically speed up your workflow.</p>
+              <div class="shortcuts-grid">
+                <div class="shortcut-item"><kbd>V</kbd><span>Select Tool</span></div>
+                <div class="shortcut-item"><kbd>H</kbd><span>Pan Tool</span></div>
+                <div class="shortcut-item"><kbd>N</kbd><span>Node Editor</span></div>
+                <div class="shortcut-item"><kbd>P</kbd><span>Pen Tool (Bezier)</span></div>
+                <div class="shortcut-item"><kbd>R</kbd><span>Rectangle Tool</span></div>
+                <div class="shortcut-item"><kbd>E</kbd><span>Ellipse Tool</span></div>
+                <div class="shortcut-item"><kbd>L</kbd><span>Line Tool</span></div>
+                <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Z</kbd><span>Undo</span></div>
+                <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>Y</kbd><span>Redo</span></div>
+                <div class="shortcut-item"><kbd>Del</kbd><span>Delete Selection/Node</span></div>
+                <div class="shortcut-item"><kbd>Esc</kbd><span>Deselect All</span></div>
+                <div class="shortcut-item"><kbd>Shift</kbd>+<kbd>Click</kbd><span>Multi-Select</span></div>
+                <div class="shortcut-item"><kbd>Mid Mouse</kbd><span>Pan (Any Tool)</span></div>
+                <div class="shortcut-item"><kbd>Scroll</kbd><span>Zoom In/Out</span></div>
+                <div class="shortcut-item"><kbd>Ctrl</kbd>+<kbd>'</kbd><span>Toggle Grid</span></div>
+                <div class="shortcut-item"><kbd>Shift</kbd>+<kbd>'</kbd><span>Toggle Snap</span></div>
+              </div>
+            </article>
+
+            <!-- Vector Tools -->
+            <article id="help-tools" class="help-article" hidden>
+              <h3>Vector Tools & Node Editing</h3>
+              <p>Vectronomy offers powerful low-level vector manipulation.</p>
+              
+              <h4>The Node Editor (<kbd>N</kbd>)</h4>
+              <p>The Node tool is your most powerful asset. Select it and click any path or shape to reveal its anchor nodes.</p>
+              <ul>
+                <li><strong>Move Nodes:</strong> Drag the white squares to reshape the geometry.</li>
+                <li><strong>Add Nodes:</strong> Double-click anywhere on the path stroke to inject a new node.</li>
+                <li><strong>Delete Nodes:</strong> Click a node to select it, then press <kbd>Delete</kbd>.</li>
+              </ul>
+
+              <h4>Drawing Pens & Brushes (<kbd>P</kbd> / <kbd>B</kbd>)</h4>
+              <p>Found under the pen dropdown menu in the toolbar, these tools let you create custom paths.</p>
+              <ul>
+                <li><strong>Bezier Pen:</strong> Click to create sharp corner nodes. Click and drag to create smooth bezier curve handles. Press <kbd>Esc</kbd> to finish a path, or click the starting node to close it.</li>
+                <li><strong>Freehand Pencil:</strong> Click and drag to freely sketch natural lines. The software automatically smooths your strokes into clean vector paths.</li>
+                <li><strong>Vector Brush:</strong> A pressure-sensitive brush (when used with a tablet) that creates stylistic, variable-width vector shapes instead of basic stroked lines.</li>
+              </ul>
+
+              <h4>Geometric Shapes (<kbd>S</kbd>)</h4>
+              <p>The shapes dropdown gives you access to parametric geometry. Hold <kbd>Shift</kbd> while dragging to constrain proportions (perfect circles, perfect squares, straight lines).</p>
+              <ul>
+                <li><strong>Line Segment & Polyline:</strong> Draw straight lines or connected multi-segment lines.</li>
+                <li><strong>Rectangle & Ellipse:</strong> The standard building blocks.</li>
+                <li><strong>Polygon & Star:</strong> Draw multi-sided polygons and complex stars. You can adjust the number of points/sides in the right properties panel!</li>
+                <li><strong>Logarithmic Spiral:</strong> Generate perfect mathematical spirals.</li>
+              </ul>
+
+              <h4>Advanced Raster-Style Tools (<kbd>E</kbd> / <kbd>W</kbd>)</h4>
+              <p>Vectronomy blurs the line between raster and vector workflows with these advanced tools.</p>
+              <ul>
+                <li><strong>Eraser Tool:</strong> Click and drag over existing vector paths to physically slice them apart and delete the intersecting segments.</li>
+                <li><strong>Magic Wand:</strong> Click on a shape to automatically select all other shapes in the document with similar fill/stroke properties.</li>
+              </ul>
+
+              <h4>Pathfinder Operations</h4>
+              <p>Select two or more overlapping shapes to unlock the Pathfinder tools in the right properties panel. You can <strong>Unite</strong>, <strong>Subtract</strong>, <strong>Intersect</strong>, or <strong>Exclude</strong> shapes instantly to create complex boolean geometry.</p>
+            </article>
+
+            <!-- Exporting -->
+            <article id="help-export" class="help-article" hidden>
+              <h3>Exporting & XCS Integration</h3>
+              <p>Export your designs flawlessly for laser cutting or external software.</p>
+              
+              <h4>Auto-Normalization</h4>
+              <p>Vectronomy uses an optimized "Cyan" color for the studio layout to improve visibility. Upon exporting, the studio automatically normalizes all drawing paths back to pure black (<code>#000000</code>) so your laser cutter recognizes the cuts properly.</p>
+
+              <h4>Formats Supported</h4>
+              <ul>
+                <li><strong>Vector SVG:</strong> The standard format for all laser software. Preserves all geometry perfectly.</li>
+                <li><strong>Raster Images:</strong> Export as PNG (transparent) or JPEG (white background) for previews.</li>
+                <li><strong>Copy SVG Code:</strong> For developers, you can copy the raw SVG string directly to your clipboard.</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
     </main>
+
+    <!-- ── Sidebar Menu (Hamburger) ────────────────────────────── -->
+    <div id="sidebar-overlay" class="modal-overlay" hidden></div>
+    <aside id="app-sidebar" class="app-sidebar" hidden>
+      <div class="sidebar-header" style="flex-direction: column; align-items: flex-start; gap: 16px; padding-top: 24px; padding-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+          <div class="brand-icon">
+            <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 2L28 9V23L16 30L4 23V9L16 2Z" stroke="currentColor" stroke-width="1.5" fill="none"/>
+              <path d="M16 8L22 11.5V18.5L16 22L10 18.5V11.5L16 8Z" stroke="currentColor" stroke-width="1.2" fill="none" opacity="0.6"/>
+              <circle cx="16" cy="15" r="2.5" fill="currentColor" opacity="0.8"/>
+            </svg>
+          </div>
+          <button id="btn-sidebar-close" class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+        <div class="brand-text" style="display: block;">
+          <h1 style="font-size: 1.2rem;">VECTRONOMY</h1>
+          <span class="brand-beta" style="display: block; margin-top: 4px;">(Alpha v0.03.2026)</span>
+        </div>
+      </div>
+      <div class="sidebar-content">
+        <div class="sidebar-section">
+          <h3>Tools & Views</h3>
+          <button class="sidebar-item" id="btn-sidebar-roadmap">Feature Roadmap</button>
+          <button class="sidebar-item" id="btn-sidebar-projects">Projects Manager</button>
+          <button class="sidebar-item" id="btn-sidebar-settings">Settings</button>
+          <button class="sidebar-item" id="btn-sidebar-hotkeys">Keyboard Shortcuts</button>
+        </div>
+
+        <div class="sidebar-section">
+          <h3>Current Workspace</h3>
+          <button class="sidebar-item" id="btn-sidebar-download" style="color:var(--accent);">Download Project (.vectronomy)</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ── Projects Modal ─────────────────────────────────────── -->
+    <div id="modal-projects" class="modal glass-modal" hidden>
+      <div class="modal-header">
+        <h3>Project Manager</h3>
+        <button id="btn-projects-close" class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-content" style="max-height: 70vh; overflow-y: auto;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <span style="font-size: 0.9rem; color: var(--text-secondary);">Manage your saved internal projects</span>
+          <button id="btn-save-current-project" class="btn btn-primary btn-sm">Save Current Project</button>
+        </div>
+        
+        <div id="projects-list" style="display: flex; flex-direction: column; gap: 10px;">
+          <!-- Dynamically populated via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Settings Modal ─────────────────────────────────────── -->
+    <div id="modal-settings" class="modal glass-modal" hidden>
+      <div class="modal-header">
+        <h3>Settings & Profiles</h3>
+        <button id="btn-settings-close" class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-content" style="max-height: 60vh; overflow-y: auto;">
+        
+        <div class="prop-section">
+          <div class="prop-section-title">General</div>
+          <div style="display: flex; gap: 10px; flex-direction: column;">
+            <div>
+              <label style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 4px; display: block;">Units</label>
+              <select id="setting-units" class="prop-select" style="width:100%">
+                <option value="mm">Millimeters (mm)</option>
+                <option value="in">Inches (in)</option>
+              </select>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.8rem; margin-top: 8px;">
+              <input type="checkbox" id="setting-show-grid" checked /> Show Background Grid
+            </label>
+          </div>
+        </div>
+
+        <div class="prop-section" style="margin-top:20px;">
+          <div class="prop-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            Machine Profile
+            <button id="btn-add-machine" class="btn btn-secondary btn-xs" style="padding: 2px 6px; font-size: 0.7rem; height: 20px;">+ Add</button>
+          </div>
+          <select id="setting-machine-select" class="prop-select" style="width:100%; margin-bottom: 10px;"></select>
+          <div id="machine-profile-fields" style="display: none; flex-direction: column; gap: 8px; background: var(--bg-tertiary); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <input type="text" id="machine-name" class="prop-input" placeholder="Machine Name (e.g. xTool D1 Pro)" style="width:100%; margin-bottom: 4px;" />
+            <div style="display: flex; gap: 8px;">
+              <div style="flex:1;"><label style="font-size:0.7rem; color:var(--text-secondary);">Bed W (mm)</label><input type="number" id="machine-bed-w" class="prop-input" style="width:100%" /></div>
+              <div style="flex:1;"><label style="font-size:0.7rem; color:var(--text-secondary);">Bed H (mm)</label><input type="number" id="machine-bed-h" class="prop-input" style="width:100%" /></div>
+            </div>
+            <div>
+              <label style="font-size:0.7rem; color:var(--text-secondary);">Spot Size (mm)</label>
+              <input type="number" id="machine-spot" class="prop-input" style="width:100%" step="0.01" />
+            </div>
+            <button id="btn-save-machine" class="btn btn-primary btn-sm" style="margin-top: 4px;">Save Machine</button>
+          </div>
+        </div>
+
+        <div class="prop-section" style="margin-top:20px;">
+          <div class="prop-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            Material Profile
+            <button id="btn-add-material" class="btn btn-secondary btn-xs" style="padding: 2px 6px; font-size: 0.7rem; height: 20px;">+ Add</button>
+          </div>
+          <select id="setting-material-select" class="prop-select" style="width:100%; margin-bottom: 10px;"></select>
+          <div id="material-profile-fields" style="display: none; flex-direction: column; gap: 8px; background: var(--bg-tertiary); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--border);">
+            <input type="text" id="material-name" class="prop-input" placeholder="Material Name (e.g. 3mm Basswood)" style="width:100%; margin-bottom: 4px;" />
+            <div style="display: flex; gap: 8px;">
+              <div style="flex:1;"><label style="font-size:0.7rem; color:var(--text-secondary);">Speed (mm/s)</label><input type="number" id="material-speed" class="prop-input" style="width:100%" /></div>
+              <div style="flex:1;"><label style="font-size:0.7rem; color:var(--text-secondary);">Power (%)</label><input type="number" id="material-power" class="prop-input" style="width:100%" /></div>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <div style="flex:1;"><label style="font-size:0.7rem; color:var(--text-secondary);">Passes</label><input type="number" id="material-passes" class="prop-input" style="width:100%" /></div>
+              <div style="flex:1;"><label style="font-size:0.7rem; color:var(--text-secondary);">Thick (mm)</label><input type="number" id="material-thick" class="prop-input" style="width:100%" step="0.1" /></div>
+            </div>
+            <button id="btn-save-material" class="btn btn-primary btn-sm" style="margin-top: 4px;">Save Material</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Hotkey Modal ───────────────────────────────────────── -->
+    <div id="modal-hotkeys" class="modal glass-modal" hidden>
+      <div class="modal-header">
+        <h3>Keyboard Shortcuts</h3>
+        <button id="btn-hotkeys-close" class="btn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+      <div class="modal-content" style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; font-size:0.8rem;">
+        <div>
+          <h4>Tools</h4>
+          <div><kbd>V</kbd> Select / Move</div>
+          <div><kbd>H</kbd> Pan / Hand</div>
+          <div><kbd>P</kbd> Pen / Bezier</div>
+          <div><kbd>R</kbd> Rectangle</div>
+          <div><kbd>E</kbd> Ellipse</div>
+        </div>
+        <div>
+          <h4>Actions</h4>
+          <div><kbd>Ctrl+Z</kbd> Undo</div>
+          <div><kbd>Ctrl+Y</kbd> Redo</div>
+          <div><kbd>Del</kbd> Delete Selected</div>
+          <div><kbd>?</kbd> Show Shortcuts</div>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <!-- ── Dedicated Roadmap Page Route ────────────────────────── -->
@@ -648,6 +1074,6 @@
       </div>
     </div>
   </div>
-
+
 </body>
 </html>
