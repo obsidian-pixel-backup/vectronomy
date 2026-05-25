@@ -4,8 +4,8 @@ export interface FeatureDoc {
   tech: string;
 }
 
-export const COMPLETED_FEATURES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 59, 91, 92, 96, 97, 100, 133, 134]);
-export const IN_PROGRESS_FEATURES = new Set([21, 22, 23, 24, 28, 62, 63]);
+export const COMPLETED_FEATURES = new Set([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 21, 22, 23, 24, 28, 59, 68, 70, 91, 92, 96, 97, 100, 133, 134]);
+export const IN_PROGRESS_FEATURES = new Set([62, 63]);
 
 export const FEATURE_DOCS: Record<number, FeatureDoc> = {
   1: {
@@ -107,5 +107,45 @@ export const FEATURE_DOCS: Record<number, FeatureDoc> = {
     readme: "Translates canvas coordinates between physical units (mm, cm, inches) and screen coordinates (px), updating rulers and properties grids.",
     usage: "Adjust the active unit dropdown in the properties inspector to view absolute widths, heights, and coordinates in your preferred standard.",
     tech: "Calculates conversions using standard 96 DPI ratios: 1 inch = 96px, 1mm ≈ 3.779px. Multiplies bounding boxes and coordinate trackers in real-time."
+  },
+  16: {
+    readme: "Cleans up and simplifies over-complicated vector geometries by removing unnecessary anchor points.",
+    usage: "Select a node using the Node Tool and press Backspace or Delete. The path will be closed and maintained.",
+    tech: "Delete selected segment indices and mathematically recalculate the surrounding curve segments to seal the path."
+  },
+  21: {
+    readme: "Melds overlapping vectors (like script lettering) into a single cohesive cut profile.",
+    usage: "Select two or more overlapping shapes and choose Unite from the Pathfinder options.",
+    tech: "Calls the native Paper.js path.unite(otherPath) method on selected paths."
+  },
+  22: {
+    readme: "Creates custom holes, cutouts, and slots inside panels.",
+    usage: "Select a base shape and an overlapping shape to cut out, then choose Subtract from the Pathfinder options.",
+    tech: "Calls Paper.js path.subtract(otherPath) to subtract the top item from the bottom."
+  },
+  23: {
+    readme: "Retains only overlapping areas, perfect for masking patterns into boundaries.",
+    usage: "Select two overlapping shapes and choose Intersect from the Pathfinder options.",
+    tech: "Calls Paper.js path.intersect(otherPath)."
+  },
+  24: {
+    readme: "Instantly creates hollow frames or transparent stencil layouts.",
+    usage: "Select overlapping shapes and choose Exclude from the Pathfinder options.",
+    tech: "Calls Paper.js path.exclude(otherPath)."
+  },
+  28: {
+    readme: "Reduces G-code file sizes and prevents machinery jitter by removing redundant curve nodes.",
+    usage: "Applied automatically during sketching to smooth out and simplify paths.",
+    tech: "Uses a custom Douglas-Peucker simplification algorithm to reduce node weight based on curve delta calculations."
+  },
+  68: {
+    readme: "Quickly removes backgrounds from imported images before tracing.",
+    usage: "Select the Eraser tool and draw over the background you want to remove.",
+    tech: "Leverages an offscreen canvas in the RasterEngine with destination-out composite operations."
+  },
+  70: {
+    readme: "Adjusts image properties for maximum trace clarity from poor photos.",
+    usage: "Select an image and apply Brightness, Contrast, and Blur filters via the properties panel.",
+    tech: "Uses CSS filters on a 2D canvas context to permanently bake pixel adjustments into the base64 raster image."
   }
 };

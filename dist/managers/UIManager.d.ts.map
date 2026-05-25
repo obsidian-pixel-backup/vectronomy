@@ -1,0 +1,1 @@
+{"version":3,"file":"UIManager.d.ts","sourceRoot":"","sources":["../../src/managers/UIManager.ts"],"names":[],"mappings":"AAMA,qBAAa,SAAS;IACpB,OAAO,CAAC,UAAU,CAAyC;;IAS3D,OAAO,CAAC,SAAS;IAqBjB,OAAO,CAAC,UAAU;IAsBlB,OAAO,CAAC,WAAW;IAuBnB,OAAO,CAAC,UAAU;IAsBlB,OAAO,CAAC,SAAS;IAUjB,OAAO,CAAC,SAAS;IAUjB,OAAO,CAAC,WAAW;CAOpB"}

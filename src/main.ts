@@ -18,6 +18,12 @@ import roadmapMd from '../VECTRONOMY_ROADMAP_AND_DOCUMENTATION.md?raw';
 import { parseRoadmap, Division, Phase, Feature } from './roadmapParser';
 import { COMPLETED_FEATURES, IN_PROGRESS_FEATURES, FEATURE_DOCS } from './featureDocs';
 
+// Import Phase 1 Managers
+import { UIManager } from './managers/UIManager';
+import { StorageManager } from './managers/StorageManager';
+import { ProjectManager } from './managers/ProjectManager';
+import { GridManager } from './managers/GridManager';
+
 // ── DOM ─────────────────────────────────────────────────────────
 
 const dropZone        = document.getElementById('drop-zone') as HTMLElement;
@@ -30,6 +36,11 @@ const layerTabs       = document.getElementById('layer-tabs') as HTMLElement;
 const previewContainer= document.getElementById('preview-container') as HTMLElement;
 const statsEl         = document.getElementById('conversion-stats') as HTMLElement;
 const zoomDisplay     = document.getElementById('zoom-level-display') as HTMLElement;
+
+// Header containers
+const headerFileActions    = document.getElementById('header-file-actions') as HTMLElement;
+const headerStudioActions  = document.getElementById('header-studio-actions') as HTMLElement;
+const headerLayerTabs      = document.getElementById('header-layer-tabs-container') as HTMLElement;
 
 // Header nav file inputs
 const fileInputXcs    = document.getElementById('file-input-xcs') as HTMLInputElement;
@@ -430,10 +441,15 @@ function showStudio(durationMs: number, fileName: string) {
   showProcessing(false);
   dropZone.hidden = true;
   studio.hidden = false;
+  headerFileActions.style.display = 'none';
+  headerStudioActions.style.display = 'flex';
+  headerLayerTabs.style.display = 'flex';
   activeLayerIndex = 0;
 
   buildLayerTabs();
   showLayer(0);
+  
+  if (gridManager) gridManager.renderGrid();
 
   const total = convertedLayers.reduce((s, l) => s + l.elementCount, 0);
   statsEl.innerHTML = `
@@ -518,6 +534,8 @@ function initEditor() {
     () => { if (panzoom) panzoom.setOptions({ disablePan: false }); }
   );
 
+  editor.setSnapFunction((pt) => gridManager.snapPoint(pt));
+
   // ── Tool buttons ────────────────────────────────────────────
   const toolBtns = document.querySelectorAll<HTMLButtonElement>('.tool-btn[id^="tool-"]');
   toolBtns.forEach(btn => {
@@ -543,6 +561,7 @@ function initEditor() {
       btn.classList.add('active');
       const tool = btn.id.replace('tool-', '') as any;
       editor!.setTool(tool);
+      updateToolOptionsUI(tool);
     });
   });
 
@@ -584,6 +603,7 @@ function initEditor() {
 
       const tool = item.getAttribute('data-tool')!;
       editor!.setTool(tool as any);
+      updateToolOptionsUI(tool);
 
       popover?.classList.remove('show');
     });
@@ -617,6 +637,11 @@ function initEditor() {
     document.getElementById(`align-${mode}`)?.addEventListener('click', () => editor?.alignTo(mode));
   });
 
+  // ── Pathfinder buttons ────────────────────────────────────────
+  (['unite','subtract','intersect','exclude'] as const).forEach(mode => {
+    document.getElementById(`path-${mode}`)?.addEventListener('click', () => editor?.pathfinderOperation(mode));
+  });
+
   // ── Order buttons ────────────────────────────────────────────
   document.getElementById('order-front')!.addEventListener('click', () => editor?.bringToFront());
   document.getElementById('order-forward')!.addEventListener('click', () => editor?.bringForward());
@@ -643,13 +668,18 @@ function initEditor() {
     if (!inInput && e.key === 'y') switchTool('polyline');
     if (!inInput && e.key === 'p') switchTool('pen');
     if (!inInput && e.key === 'n') switchTool('node');
-    if (!inInput && (e.key === 'f' || e.key === 'F')) {
+    if (!inInput && (e.key === 'f' || e.key === 'F')) switchTool('frame');
+    if (!inInput && e.key === '!' && e.shiftKey) { // Shift + 1
       const svgEl = previewContainer.querySelector('svg') as SVGSVGElement | null;
       if (svgEl) fitSvgToView(svgEl);
     }
     if (!inInput && e.key === '+') { if (panzoom) panzoom.zoomIn(); }
     if (!inInput && e.key === '-') { if (panzoom) panzoom.zoomOut(); }
     if (!inInput && e.key === '0') { if (panzoom) panzoom.reset(); }
+    if (!inInput && (e.ctrlKey || e.metaKey) && e.key === "'") {
+      e.preventDefault();
+      if (gridManager) gridManager.toggleGrid();
+    }
 
     // Arrow key micro-adjustments / nudging
     if (!inInput && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
@@ -680,6 +710,7 @@ function switchTool(tool: string) {
   if (btn) {
     btn.classList.add('active');
     editor?.setTool(tool as any);
+    updateToolOptionsUI(tool);
   } else {
     const shapeItem = document.querySelector(`.shape-menu-item[data-tool="${tool}"]`);
     if (shapeItem) {
@@ -708,6 +739,27 @@ function switchTool(tool: string) {
         targetToggle.appendChild(itemSvg);
       }
       editor?.setTool(tool as any);
+      updateToolOptionsUI(tool);
+    }
+  }
+}
+
+function updateToolOptionsUI(tool: string) {
+  const optSection = document.getElementById('props-tool-options');
+  const optPoly = document.getElementById('tool-opt-polygon-sides');
+  const optStar = document.getElementById('tool-opt-star-points');
+  const optBrushSize = document.getElementById('tool-opt-brush-size');
+  const optBrushStyle = document.getElementById('tool-opt-brush-style');
+  
+  if (optSection && optPoly && optStar && optBrushSize && optBrushStyle) {
+    if (tool === 'polygon' || tool === 'star' || tool === 'brush' || tool === 'eraser') {
+      optSection.style.display = 'block';
+      optPoly.style.display = tool === 'polygon' ? 'block' : 'none';
+      optStar.style.display = tool === 'star' ? 'block' : 'none';
+      optBrushSize.style.display = (tool === 'brush' || tool === 'eraser') ? 'block' : 'none';
+      optBrushStyle.style.display = tool === 'brush' ? 'block' : 'none';
+    } else {
+      optSection.style.display = 'none';
     }
   }
 }
@@ -856,6 +908,7 @@ function pushUndo(svg: string) {
   if (undoHistory.length > MAX_HISTORY) undoHistory.shift();
   redoHistory = [];
   updateHistoryBtns();
+  if (storageManager) storageManager.saveWorkspace(JSON.stringify(convertedLayers));
 }
 
 function undo() {
@@ -877,10 +930,29 @@ function redo() {
 function applySvgState(svg: string) {
   const layer = convertedLayers[activeLayerIndex];
   if (!layer) return;
+  
+  // Capture current zoom and pan state
+  let currentScale = 1;
+  let currentPan = { x: 0, y: 0 };
+  if (panzoom) {
+    currentScale = panzoom.getScale();
+    currentPan = panzoom.getPan();
+  }
+
   layer.svg = svg;
+  if (storageManager) storageManager.saveWorkspace(JSON.stringify(convertedLayers));
   previewContainer.innerHTML = svg;
   editor?.setLayer(layer);
-  initPanzoom(true);
+  
+  // Re-initialize panzoom without auto-fitting to view
+  initPanzoom(false);
+  
+  // Restore captured state
+  if (panzoom) {
+    panzoom.zoom(currentScale, { animate: false });
+    panzoom.pan(currentPan.x, currentPan.y, { animate: false });
+    updateZoomDisplay();
+  }
 }
 
 function updateHistoryBtns() {
@@ -1023,6 +1095,23 @@ if (exportToggle && exportDropdown) {
   });
 }
 
+// ── Grid Settings Dropdown ───────────────────────────────────────
+const btnGridSettings = document.getElementById('btn-grid-settings');
+const gridSettingsMenu = document.getElementById('grid-settings-menu');
+
+if (btnGridSettings && gridSettingsMenu) {
+  btnGridSettings.addEventListener('click', (e) => {
+    e.stopPropagation();
+    gridSettingsMenu.classList.toggle('show');
+  });
+  
+  gridSettingsMenu.addEventListener('click', (e) => e.stopPropagation());
+
+  document.addEventListener('click', () => {
+    gridSettingsMenu.classList.remove('show');
+  });
+}
+
 // ── Import Dropdown Events ───────────────────────────────────────
 const importToggle = document.getElementById('btn-import-toggle');
 const importDropdown = document.getElementById('import-dropdown');
@@ -1083,6 +1172,9 @@ document.getElementById('btn-copy')!.addEventListener('click', async () => {
 document.getElementById('btn-reset')!.addEventListener('click', () => {
   convertedLayers = []; activeLayerIndex = 0;
   studio.hidden = true; dropZone.hidden = false;
+  headerFileActions.style.display = 'flex';
+  headerStudioActions.style.display = 'none';
+  headerLayerTabs.style.display = 'none';
   fileInputXcs.value = ''; fileInputSvg.value = '';
   previewContainer.innerHTML = '';
   statsEl.innerHTML = ''; layerTabs.innerHTML = '';
@@ -1155,6 +1247,51 @@ function bindPropInputs() {
   propFillHex.addEventListener('input', () => {
     if (/^#[0-9a-f]{6}$/i.test(propFillHex.value)) propFillColor.value = propFillHex.value;
   });
+
+  // Image adjustments
+  const propImgBrightness = document.getElementById('prop-brightness') as HTMLInputElement | null;
+  const propImgContrast = document.getElementById('prop-contrast') as HTMLInputElement | null;
+  const propImgBlur = document.getElementById('prop-blur') as HTMLInputElement | null;
+
+  if (propImgBrightness && propImgContrast && propImgBlur) {
+    const pushImgAdjustments = () => {
+      editor?.applyImageFilters(
+        parseInt(propImgBrightness.value) || 0,
+        parseInt(propImgContrast.value) || 0,
+        parseInt(propImgBlur.value) || 0
+      );
+    };
+    [propImgBrightness, propImgContrast, propImgBlur].forEach(el => {
+      el.addEventListener('change', pushImgAdjustments);
+    });
+  }
+
+  // Parametric Tools options
+  const propPolygonSides = document.getElementById('prop-polygon-sides') as HTMLInputElement | null;
+  const propStarPoints = document.getElementById('prop-star-points') as HTMLInputElement | null;
+  const propBrushSize = document.getElementById('prop-brush-size') as HTMLInputElement | null;
+  const propBrushStyle = document.getElementById('prop-brush-style') as HTMLSelectElement | null;
+  
+  if (propPolygonSides) {
+    propPolygonSides.addEventListener('input', () => {
+      if (editor) editor.polygonSides = parseInt(propPolygonSides.value) || 5;
+    });
+  }
+  if (propStarPoints) {
+    propStarPoints.addEventListener('input', () => {
+      if (editor) editor.starPoints = parseInt(propStarPoints.value) || 5;
+    });
+  }
+  if (propBrushSize) {
+    propBrushSize.addEventListener('input', () => {
+      if (editor) editor.brushSize = parseInt(propBrushSize.value) || 12;
+    });
+  }
+  if (propBrushStyle) {
+    propBrushStyle.addEventListener('change', () => {
+      if (editor) editor.brushStyle = propBrushStyle.value as any;
+    });
+  }
 }
 
 // ── Utilities ─────────────────────────────────────────────────────
@@ -1605,9 +1742,47 @@ searchRoadmap.addEventListener('input', () => {
   renderFeaturesList();
 });
 
+// ── Managers ──────────────────────────────────────────────────────
+let uiManager: UIManager;
+let storageManager: StorageManager;
+let projectManager: ProjectManager;
+let gridManager: GridManager;
+
 // ── Startup ───────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Initialize Managers
+  uiManager = new UIManager();
+  storageManager = new StorageManager();
+  projectManager = new ProjectManager();
+  gridManager = new GridManager();
+
+  // Wire sidebar download project button
+  const btnDownloadProject = document.getElementById('btn-sidebar-download');
+  if (btnDownloadProject) {
+    btnDownloadProject.addEventListener('click', () => {
+      document.getElementById('btn-sidebar-close')?.click();
+      projectManager.exportProject(convertedLayers);
+    });
+  }
+  
+  // Auto-recover workspace if exists
+  storageManager.loadWorkspace().then(state => {
+    if (state) {
+      try {
+        const layers = JSON.parse(state);
+        if (layers && layers.length > 0) {
+          convertedLayers = layers;
+          showStudio(0, 'Auto-Recovered Workspace');
+          // Little toast message hack (if showToast exists, else skip)
+          if (typeof showToast !== 'undefined') showToast('Restored previous session workspace.');
+        }
+      } catch (e) {
+        console.error('Failed to parse auto-saved workspace', e);
+      }
+    }
+  });
+
   // Wait for initial render, then trigger landing tour
   setTimeout(() => runLandingTour(), 500);
 });

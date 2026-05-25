@@ -1,0 +1,1661 @@
+/**
+ * VECTRONOMY — Application Entry Point v2
+ *
+ * Wires UI → engine for XCS conversion, SVG import, layer navigation,
+ * preview rendering, full property editing, z-order, align, undo/redo,
+ * download and source viewing.
+ */
+import { XcsConverter } from './engine';
+import Panzoom from '@panzoom/panzoom';
+import { VectorEditor } from './engine/editor';
+import { runLandingTour, runEditorTour, toggleHelpPanel } from './onboarding';
+// Import roadmap asset and parser
+import roadmapMd from '../VECTRONOMY_ROADMAP_AND_DOCUMENTATION.md?raw';
+import { parseRoadmap } from './roadmapParser';
+import { COMPLETED_FEATURES, IN_PROGRESS_FEATURES, FEATURE_DOCS } from './featureDocs';
+// Import Phase 1 Managers
+import { UIManager } from './managers/UIManager';
+import { StorageManager } from './managers/StorageManager';
+import { ProjectManager } from './managers/ProjectManager';
+import { GridManager } from './managers/GridManager';
+// ── DOM ─────────────────────────────────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const dropContent = dropZone.querySelector('.drop-zone-content');
+const dropProcessing = dropZone.querySelector('.drop-zone-processing');
+const processingStatus = document.getElementById('processing-status');
+const studio = document.getElementById('studio');
+const layerTabs = document.getElementById('layer-tabs');
+const previewContainer = document.getElementById('preview-container');
+const statsEl = document.getElementById('conversion-stats');
+const zoomDisplay = document.getElementById('zoom-level-display');
+// Header containers
+const headerFileActions = document.getElementById('header-file-actions');
+const headerStudioActions = document.getElementById('header-studio-actions');
+const headerLayerTabs = document.getElementById('header-layer-tabs-container');
+// Header nav file inputs
+const fileInputXcs = document.getElementById('file-input-xcs');
+const fileInputSvg = document.getElementById('file-input-svg');
+// Properties
+const propsEmpty = document.getElementById('props-empty');
+const propsSelection = document.getElementById('props-selection');
+const propElType = document.getElementById('prop-el-type');
+const propX = document.getElementById('prop-x');
+const propY = document.getElementById('prop-y');
+const propW = document.getElementById('prop-w');
+const propH = document.getElementById('prop-h');
+const propRotation = document.getElementById('prop-rotation');
+const propOpacity = document.getElementById('prop-opacity');
+const propStrokeColor = document.getElementById('prop-stroke-color');
+const propStrokeHex = document.getElementById('prop-stroke-color-hex');
+const propStrokeW = document.getElementById('prop-stroke-w');
+const propStrokeOp = document.getElementById('prop-stroke-opacity');
+const propStrokeCap = document.getElementById('prop-stroke-cap');
+const propStrokeJoin = document.getElementById('prop-stroke-join');
+const propFillEnabled = document.getElementById('prop-fill-enabled');
+const propFillColor = document.getElementById('prop-fill-color');
+const propFillHex = document.getElementById('prop-fill-color-hex');
+const propFillOp = document.getElementById('prop-fill-opacity');
+const propFillRule = document.getElementById('prop-fill-rule');
+// ── State ────────────────────────────────────────────────────────
+let convertedLayers = [];
+let activeLayerIndex = 0;
+let panzoom = null;
+let editor = null;
+let undoHistory = [];
+let redoHistory = [];
+const MAX_HISTORY = 30;
+let suppressPropUpdates = false;
+// ── File Import ──────────────────────────────────────────────────
+// Header buttons
+// Header buttons
+document.getElementById('btn-import-xcs').addEventListener('click', () => fileInputXcs.click());
+document.getElementById('btn-import-svg').addEventListener('click', () => fileInputSvg.click());
+document.getElementById('btn-import-png')?.addEventListener('click', () => fileInputSvg.click());
+document.getElementById('btn-import-jpeg')?.addEventListener('click', () => fileInputSvg.click());
+document.getElementById('btn-new-canvas').addEventListener('click', () => openBlankCanvas());
+document.getElementById('btn-help').addEventListener('click', () => toggleHelpPanel());
+// Drop zone buttons
+document.getElementById('btn-browse-xcs').addEventListener('click', (e) => { e.stopPropagation(); fileInputXcs.click(); });
+document.getElementById('btn-browse-svg').addEventListener('click', (e) => { e.stopPropagation(); fileInputSvg.click(); });
+document.getElementById('btn-new-canvas-drop').addEventListener('click', (e) => { e.stopPropagation(); openBlankCanvas(); });
+fileInputXcs.addEventListener('change', () => {
+    if (fileInputXcs.files?.length)
+        processXcsFile(fileInputXcs.files[0]);
+});
+fileInputSvg.addEventListener('change', () => {
+    if (fileInputSvg.files?.length) {
+        const file = fileInputSvg.files[0];
+        const nameLower = file.name.toLowerCase();
+        if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
+            processImageFile(file);
+        }
+        else {
+            processSvgFile(file);
+        }
+    }
+});
+// Drag & Drop (Landing Page)
+dropZone.addEventListener('click', (e) => {
+    if (e.target.closest('button'))
+        return;
+    fileInputXcs.click();
+});
+dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    const file = e.dataTransfer?.files[0];
+    if (!file)
+        return;
+    const nameLower = file.name.toLowerCase();
+    if (nameLower.endsWith('.svg')) {
+        processSvgFile(file);
+    }
+    else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
+        processImageFile(file);
+    }
+    else {
+        processXcsFile(file);
+    }
+});
+// Drag & Drop (Editor Canvas - Figma style)
+previewContainer.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    if (e.dataTransfer?.types.includes('Files')) {
+        previewContainer.classList.add('drag-over');
+    }
+});
+previewContainer.addEventListener('dragleave', () => {
+    previewContainer.classList.remove('drag-over');
+});
+previewContainer.addEventListener('drop', (e) => {
+    e.preventDefault();
+    previewContainer.classList.remove('drag-over');
+    const files = e.dataTransfer?.files;
+    if (!files || !files.length)
+        return;
+    // Calculate dropping canvas coordinate
+    const canvasPt = editor?.getSvgPoint(e);
+    if (!canvasPt)
+        return;
+    for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const nameLower = file.name.toLowerCase();
+        if (nameLower.endsWith('.svg')) {
+            processSvgImport(file, canvasPt);
+        }
+        else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
+            processImageFile(file, canvasPt);
+        }
+        else {
+            if (confirm(`Do you want to open ${file.name} as a new design project? This will discard your current unsaved edits.`)) {
+                if (nameLower.endsWith('.xcs') || nameLower.endsWith('.zip') || nameLower.endsWith('.json')) {
+                    processXcsFile(file);
+                }
+                else {
+                    processSvgFile(file);
+                }
+            }
+        }
+    }
+});
+// ── Conversion ────────────────────────────────────────────────────
+async function processXcsFile(file) {
+    showProcessing(true, 'Parsing XCS structure…');
+    try {
+        const t0 = performance.now();
+        const options = {
+            heal: true, includeMetadata: true,
+            usePhysicalUnits: true, viewBoxPadding: 10,
+        };
+        setStatus('Building scene graph…');
+        convertedLayers = await XcsConverter.convertFile(file, options);
+        if (!convertedLayers.length)
+            throw new Error('No vector layers found in the file.');
+        setStatus('Rendering SVG…');
+        // Telemetry
+        window.va?.('event', { name: 'import_xcs', data: { fileName: file.name } });
+        showStudio(performance.now() - t0, file.name);
+    }
+    catch (err) {
+        showProcessing(false);
+        showToast(`Error: ${err.message || 'Conversion failed'}`, true);
+        console.error(err);
+    }
+}
+async function processSvgFile(file) {
+    showProcessing(true, 'Loading SVG file…');
+    try {
+        const text = await file.text();
+        // Parse raw text into a mutable DOM tree
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'image/svg+xml');
+        const svgEl = doc.querySelector('svg');
+        if (!svgEl)
+            throw new Error('Invalid SVG format.');
+        // Establish Viewport Layer if missing
+        let viewport = svgEl.querySelector('#viewport');
+        if (!viewport) {
+            viewport = doc.createElementNS('http://www.w3.org/2000/svg', 'g');
+            viewport.setAttribute('id', 'viewport');
+            // Move all direct children of <svg> into the viewport <g>
+            while (svgEl.firstChild) {
+                viewport.appendChild(svgEl.firstChild);
+            }
+            svgEl.appendChild(viewport);
+        }
+        // Inject data-xcs-ids to all standard shapes that lack them
+        const targetSelectors = 'path, rect, ellipse, circle, line, polyline, polygon, text, g';
+        const shapes = viewport.querySelectorAll(targetSelectors);
+        shapes.forEach((shape, index) => {
+            if (!shape.hasAttribute('data-xcs-id')) {
+                const uniqueId = `svg-import-${Date.now()}-${index}-${Math.random().toString(36).substring(2, 6)}`;
+                shape.setAttribute('data-xcs-id', uniqueId);
+            }
+        });
+        // Serialize enriched SVG back to a clean string
+        const enrichedSvg = new XMLSerializer().serializeToString(doc);
+        // Telemetry
+        window.va?.('event', { name: 'import_svg', data: { fileName: file.name } });
+        convertedLayers = [{
+                id: 'svg-import',
+                name: file.name.replace(/\.svg$/i, ''),
+                color: '#00ffc2',
+                svg: enrichedSvg,
+                elementCount: shapes.length,
+            }];
+        showStudio(0, file.name);
+    }
+    catch (err) {
+        showProcessing(false);
+        showToast(`Error: ${err.message}`, true);
+    }
+}
+async function processImageFile(file, dropCoords) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target?.result;
+        const img = new Image();
+        img.onload = () => {
+            // Scale down large images to fit a maximum dimension of 500px
+            let w = img.naturalWidth;
+            let h = img.naturalHeight;
+            const maxDim = 500;
+            if (w > maxDim || h > maxDim) {
+                const scale = maxDim / Math.max(w, h);
+                w = Math.round(w * scale);
+                h = Math.round(h * scale);
+            }
+            let x = 0;
+            let y = 0;
+            const studio = document.getElementById('studio');
+            if (studio && !studio.hidden && editor) {
+                if (dropCoords) {
+                    x = dropCoords.x - w / 2;
+                    y = dropCoords.y - h / 2;
+                }
+                else {
+                    // Center in current workspace viewport
+                    const rect = previewContainer.getBoundingClientRect();
+                    const screenPt = { clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 };
+                    const canvasPt = editor.getSvgPoint(screenPt);
+                    if (canvasPt) {
+                        x = canvasPt.x - w / 2;
+                        y = canvasPt.y - h / 2;
+                    }
+                }
+            }
+            else {
+                // Not in studio yet: open a blank canvas first!
+                openBlankCanvas();
+                x = 100;
+                y = 100;
+            }
+            const mainSvg = previewContainer.querySelector('svg');
+            if (mainSvg) {
+                const viewport = mainSvg.querySelector('#viewport') || mainSvg;
+                const imgEl = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+                imgEl.setAttribute('href', dataUrl);
+                imgEl.setAttribute('x', String(x));
+                imgEl.setAttribute('y', String(y));
+                imgEl.setAttribute('width', String(w));
+                imgEl.setAttribute('height', String(h));
+                imgEl.setAttribute('data-xcs-id', `img-${Date.now()}`);
+                viewport.appendChild(imgEl);
+                // Update layer SVG
+                const newSvg = mainSvg.outerHTML;
+                const layer = convertedLayers[activeLayerIndex];
+                if (layer) {
+                    layer.svg = newSvg;
+                    layer.elementCount++;
+                }
+                pushUndo(newSvg);
+                // Force editor to re-load layer
+                if (editor) {
+                    editor.setLayer(layer);
+                    // Auto select the newly placed image!
+                    editor.selectedId = imgEl.getAttribute('data-xcs-id');
+                    editor.selectedIds = new Set([editor.selectedId]);
+                    editor.renderSelectionUI();
+                }
+                showToast(`${file.name} imported successfully!`);
+            }
+        };
+        img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+}
+async function processSvgImport(file, dropCoords) {
+    try {
+        const text = await file.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'image/svg+xml');
+        const svgEl = doc.querySelector('svg');
+        if (!svgEl)
+            throw new Error('Invalid SVG');
+        const mainSvg = previewContainer.querySelector('svg');
+        if (mainSvg) {
+            const viewport = mainSvg.querySelector('#viewport') || mainSvg;
+            const tempGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            tempGroup.setAttribute('id', `imported-svg-${Date.now()}`);
+            const srcViewport = svgEl.querySelector('#viewport') || svgEl;
+            const importedNodes = [];
+            while (srcViewport.firstChild) {
+                const child = srcViewport.firstChild;
+                if (child.nodeType === Node.ELEMENT_NODE) {
+                    const el = child;
+                    if (!el.hasAttribute('data-xcs-id')) {
+                        el.setAttribute('data-xcs-id', `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`);
+                    }
+                    tempGroup.appendChild(child);
+                    importedNodes.push(el);
+                }
+                else {
+                    srcViewport.removeChild(child);
+                }
+            }
+            viewport.appendChild(tempGroup);
+            let bbox = { x: 0, y: 0, width: 200, height: 200 };
+            try {
+                const measured = tempGroup.getBBox();
+                if (measured.width > 0 && measured.height > 0) {
+                    bbox = measured;
+                }
+            }
+            catch (e) { }
+            const dx = dropCoords.x - (bbox.x + bbox.width / 2);
+            const dy = dropCoords.y - (bbox.y + bbox.height / 2);
+            const finalElements = [];
+            while (tempGroup.firstChild) {
+                const child = tempGroup.firstChild;
+                if (child.nodeType === Node.ELEMENT_NODE) {
+                    const origTransform = child.getAttribute('transform') || '';
+                    child.setAttribute('transform', `translate(${dx}, ${dy}) ${origTransform}`.trim());
+                    viewport.appendChild(child);
+                    finalElements.push(child);
+                }
+                else {
+                    tempGroup.removeChild(child);
+                }
+            }
+            tempGroup.remove();
+            const newSvg = mainSvg.outerHTML;
+            const layer = convertedLayers[activeLayerIndex];
+            if (layer) {
+                layer.svg = newSvg;
+                layer.elementCount += finalElements.length;
+            }
+            pushUndo(newSvg);
+            if (editor) {
+                editor.setLayer(layer);
+                editor.selectedIds = new Set(finalElements.map(el => el.getAttribute('data-xcs-id')));
+                if (finalElements.length === 1) {
+                    editor.selectedId = finalElements[0].getAttribute('data-xcs-id');
+                }
+                editor.renderSelectionUI();
+            }
+            showToast(`Imported vector elements from ${file.name}!`);
+        }
+    }
+    catch (e) {
+        showToast('Failed to import vector elements from SVG.', true);
+    }
+}
+function openBlankCanvas() {
+    const blankSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+  <g id="viewport">
+  </g>
+</svg>`;
+    convertedLayers = [{
+            id: 'blank', name: 'Canvas', color: '#00ffc2', svg: blankSvg, elementCount: 0,
+        }];
+    // Telemetry
+    window.va?.('event', { name: 'open_blank_canvas' });
+    showStudio(0, 'New Canvas');
+}
+// ── UI State ──────────────────────────────────────────────────────
+function showProcessing(show, msg = '') {
+    dropContent.hidden = show;
+    dropProcessing.hidden = !show;
+    if (msg)
+        processingStatus.textContent = msg;
+}
+function setStatus(msg) { processingStatus.textContent = msg; }
+function showStudio(durationMs, fileName) {
+    showProcessing(false);
+    dropZone.hidden = true;
+    studio.hidden = false;
+    headerFileActions.style.display = 'none';
+    headerStudioActions.style.display = 'flex';
+    headerLayerTabs.style.display = 'flex';
+    activeLayerIndex = 0;
+    buildLayerTabs();
+    showLayer(0);
+    if (gridManager)
+        gridManager.renderGrid();
+    const total = convertedLayers.reduce((s, l) => s + l.elementCount, 0);
+    statsEl.innerHTML = `
+    <span class="stat-item">File: <span class="stat-value">${esc(fileName)}</span></span>
+    <span class="stat-item">Layers: <span class="stat-value">${convertedLayers.length}</span></span>
+    <span class="stat-item">Elements: <span class="stat-value">${total}</span></span>
+    ${durationMs > 0 ? `<span class="stat-item">Time: <span class="stat-value">${durationMs.toFixed(0)}ms</span></span>` : ''}
+  `;
+}
+// ── Layer Tabs ────────────────────────────────────────────────────
+function buildLayerTabs() {
+    layerTabs.innerHTML = '';
+    convertedLayers.forEach((layer, i) => {
+        const btn = document.createElement('button');
+        btn.className = `layer-tab${i === 0 ? ' active' : ''}`;
+        btn.innerHTML = `
+      <span class="tab-dot" style="background:${layer.color}"></span>
+      ${esc(layer.name)}
+      <span class="tab-count">${layer.elementCount}</span>
+    `;
+        btn.addEventListener('click', () => showLayer(i));
+        layerTabs.appendChild(btn);
+    });
+}
+function getExportableSvg(svg) {
+    // Convert studio cyan working colors to black for final export
+    return svg
+        .replace(/#00ffc2/ig, '#000000')
+        .replace(/rgba\(0,\s*255,\s*194,\s*0\.1\)/ig, '#000000');
+}
+function showLayer(index) {
+    activeLayerIndex = index;
+    const layer = convertedLayers[index];
+    if (!layer)
+        return;
+    // Update tabs
+    layerTabs.querySelectorAll('.layer-tab').forEach((t, i) => t.classList.toggle('active', i === index));
+    // Render SVG
+    previewContainer.innerHTML = layer.svg;
+    // Init editor (once)
+    if (!editor)
+        initEditor();
+    editor.setLayer(layer);
+    // Init Panzoom – auto-fit to view
+    initPanzoom(true);
+    // Reset history
+    undoHistory = [layer.svg];
+    redoHistory = [];
+    updateHistoryBtns();
+}
+// ── Editor Init ───────────────────────────────────────────────────
+function initEditor() {
+    editor = new VectorEditor(previewContainer, (newSvg) => {
+        const layer = convertedLayers[activeLayerIndex];
+        if (layer)
+            layer.svg = newSvg;
+        pushUndo(newSvg);
+    }, (props) => {
+        suppressPropUpdates = true;
+        if (props) {
+            propsEmpty.hidden = true;
+            propsSelection.hidden = false;
+            populateProps(props);
+        }
+        else {
+            propsEmpty.hidden = false;
+            propsSelection.hidden = true;
+        }
+        suppressPropUpdates = false;
+    }, () => { if (panzoom)
+        panzoom.setOptions({ disablePan: true }); }, () => { if (panzoom)
+        panzoom.setOptions({ disablePan: false }); });
+    editor.setSnapFunction((pt) => gridManager.snapPoint(pt));
+    // ── Tool buttons ────────────────────────────────────────────
+    const toolBtns = document.querySelectorAll('.tool-btn[id^="tool-"]');
+    toolBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            if (btn.id === 'tool-curves-toggle') {
+                e.stopPropagation();
+                const curvesPopover = document.getElementById('curves-popover');
+                const shapesPopover = document.getElementById('shapes-popover');
+                shapesPopover?.classList.remove('show');
+                curvesPopover?.classList.toggle('show');
+                return;
+            }
+            if (btn.id === 'tool-shapes-toggle') {
+                e.stopPropagation();
+                const curvesPopover = document.getElementById('curves-popover');
+                const shapesPopover = document.getElementById('shapes-popover');
+                curvesPopover?.classList.remove('show');
+                shapesPopover?.classList.toggle('show');
+                return;
+            }
+            toolBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const tool = btn.id.replace('tool-', '');
+            editor.setTool(tool);
+            updateToolOptionsUI(tool);
+        });
+    });
+    // ── Shapes & Curves Dropdown Item Clicks ──────────────────────────────
+    const curvesPopover = document.getElementById('curves-popover');
+    const shapesPopover = document.getElementById('shapes-popover');
+    const curvesToggle = document.getElementById('tool-curves-toggle');
+    const shapesToggle = document.getElementById('tool-shapes-toggle');
+    const shapeItems = document.querySelectorAll('.shape-menu-item');
+    shapeItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const popover = item.closest('.shapes-popover-menu');
+            let targetToggle = null;
+            if (popover) {
+                if (popover.id === 'curves-popover') {
+                    targetToggle = curvesToggle;
+                }
+                else if (popover.id === 'shapes-popover') {
+                    targetToggle = shapesToggle;
+                }
+            }
+            shapeItems.forEach(i => {
+                if (i.closest('.shapes-popover-menu') === popover) {
+                    i.classList.remove('active');
+                }
+            });
+            item.classList.add('active');
+            toolBtns.forEach(b => b.classList.remove('active'));
+            if (targetToggle) {
+                targetToggle.classList.add('active');
+                const itemSvg = item.querySelector('svg').cloneNode(true);
+                targetToggle.innerHTML = '';
+                targetToggle.appendChild(itemSvg);
+            }
+            const tool = item.getAttribute('data-tool');
+            editor.setTool(tool);
+            updateToolOptionsUI(tool);
+            popover?.classList.remove('show');
+        });
+    });
+    document.addEventListener('click', () => {
+        curvesPopover?.classList.remove('show');
+        shapesPopover?.classList.remove('show');
+    });
+    // ── Array Grid Generator Button Click ─────────────────────────
+    const btnCreateArray = document.getElementById('btn-create-array');
+    if (btnCreateArray) {
+        btnCreateArray.addEventListener('click', () => {
+            const rows = parseInt(document.getElementById('prop-array-rows').value) || 2;
+            const cols = parseInt(document.getElementById('prop-array-cols').value) || 2;
+            const spacingX = parseFloat(document.getElementById('prop-array-spacing-x').value) || 50;
+            const spacingY = parseFloat(document.getElementById('prop-array-spacing-y').value) || 50;
+            editor?.createGridArray(rows, cols, spacingX, spacingY);
+        });
+    }
+    // ── Undo / Redo / Delete ─────────────────────────────────────
+    document.getElementById('btn-undo').addEventListener('click', undo);
+    document.getElementById('btn-redo').addEventListener('click', redo);
+    document.getElementById('btn-delete').addEventListener('click', () => editor?.deleteSelected());
+    // ── Align buttons ────────────────────────────────────────────
+    ['left', 'center-h', 'right', 'top', 'center-v', 'bottom'].forEach(mode => {
+        document.getElementById(`align-${mode}`)?.addEventListener('click', () => editor?.alignTo(mode));
+    });
+    // ── Pathfinder buttons ────────────────────────────────────────
+    ['unite', 'subtract', 'intersect', 'exclude'].forEach(mode => {
+        document.getElementById(`path-${mode}`)?.addEventListener('click', () => editor?.pathfinderOperation(mode));
+    });
+    // ── Order buttons ────────────────────────────────────────────
+    document.getElementById('order-front').addEventListener('click', () => editor?.bringToFront());
+    document.getElementById('order-forward').addEventListener('click', () => editor?.bringForward());
+    document.getElementById('order-backward').addEventListener('click', () => editor?.sendBackward());
+    document.getElementById('order-back').addEventListener('click', () => editor?.sendToBack());
+    // ── Keyboard shortcuts ────────────────────────────────────────
+    window.addEventListener('keydown', (e) => {
+        const tag = document.activeElement?.tagName;
+        const inInput = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+        if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+            e.preventDefault();
+            undo();
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+            e.preventDefault();
+            redo();
+        }
+        if (!inInput && (e.key === 'Delete' || e.key === 'Backspace'))
+            editor?.deleteSelected();
+        if (!inInput && e.key === 'v')
+            switchTool('select');
+        if (!inInput && e.key === 'h')
+            switchTool('pan');
+        if (!inInput && e.key === 'r')
+            switchTool('rect');
+        if (!inInput && e.key === 'e')
+            switchTool('circle');
+        if (!inInput && e.key === 'o')
+            switchTool('polygon');
+        if (!inInput && e.key === 's')
+            switchTool('star');
+        if (!inInput && e.key === 'i')
+            switchTool('spiral');
+        if (!inInput && e.key === 'k')
+            switchTool('pencil');
+        if (!inInput && e.key === 'l')
+            switchTool('line');
+        if (!inInput && e.key === 'y')
+            switchTool('polyline');
+        if (!inInput && e.key === 'p')
+            switchTool('pen');
+        if (!inInput && e.key === 'n')
+            switchTool('node');
+        if (!inInput && (e.key === 'f' || e.key === 'F'))
+            switchTool('frame');
+        if (!inInput && e.key === '!' && e.shiftKey) { // Shift + 1
+            const svgEl = previewContainer.querySelector('svg');
+            if (svgEl)
+                fitSvgToView(svgEl);
+        }
+        if (!inInput && e.key === '+') {
+            if (panzoom)
+                panzoom.zoomIn();
+        }
+        if (!inInput && e.key === '-') {
+            if (panzoom)
+                panzoom.zoomOut();
+        }
+        if (!inInput && e.key === '0') {
+            if (panzoom)
+                panzoom.reset();
+        }
+        if (!inInput && (e.ctrlKey || e.metaKey) && e.key === "'") {
+            e.preventDefault();
+            if (gridManager)
+                gridManager.toggleGrid();
+        }
+        // Arrow key micro-adjustments / nudging
+        if (!inInput && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            e.preventDefault();
+            const nudgeAmount = e.shiftKey ? 10 : 1;
+            let dx = 0;
+            let dy = 0;
+            if (e.key === 'ArrowLeft')
+                dx = -nudgeAmount;
+            if (e.key === 'ArrowRight')
+                dx = nudgeAmount;
+            if (e.key === 'ArrowUp')
+                dy = -nudgeAmount;
+            if (e.key === 'ArrowDown')
+                dy = nudgeAmount;
+            editor?.nudgeSelected(dx, dy);
+        }
+    });
+    // ── Property inputs ───────────────────────────────────────────
+    bindPropInputs();
+}
+function switchTool(tool) {
+    const btn = document.getElementById(`tool-${tool}`);
+    const curvesToggle = document.getElementById('tool-curves-toggle');
+    const shapesToggle = document.getElementById('tool-shapes-toggle');
+    document.querySelectorAll('.tool-btn[id^="tool-"]').forEach(b => b.classList.remove('active'));
+    if (btn) {
+        btn.classList.add('active');
+        editor?.setTool(tool);
+        updateToolOptionsUI(tool);
+    }
+    else {
+        const shapeItem = document.querySelector(`.shape-menu-item[data-tool="${tool}"]`);
+        if (shapeItem) {
+            const popover = shapeItem.closest('.shapes-popover-menu');
+            let targetToggle = null;
+            if (popover) {
+                if (popover.id === 'curves-popover') {
+                    targetToggle = curvesToggle;
+                }
+                else if (popover.id === 'shapes-popover') {
+                    targetToggle = shapesToggle;
+                }
+            }
+            const shapeItems = document.querySelectorAll('.shape-menu-item');
+            shapeItems.forEach(i => {
+                if (i.closest('.shapes-popover-menu') === popover) {
+                    i.classList.remove('active');
+                }
+            });
+            shapeItem.classList.add('active');
+            if (targetToggle) {
+                targetToggle.classList.add('active');
+                const itemSvg = shapeItem.querySelector('svg').cloneNode(true);
+                targetToggle.innerHTML = '';
+                targetToggle.appendChild(itemSvg);
+            }
+            editor?.setTool(tool);
+            updateToolOptionsUI(tool);
+        }
+    }
+}
+function updateToolOptionsUI(tool) {
+    const optSection = document.getElementById('props-tool-options');
+    const optPoly = document.getElementById('tool-opt-polygon-sides');
+    const optStar = document.getElementById('tool-opt-star-points');
+    const optBrushSize = document.getElementById('tool-opt-brush-size');
+    const optBrushStyle = document.getElementById('tool-opt-brush-style');
+    if (optSection && optPoly && optStar && optBrushSize && optBrushStyle) {
+        if (tool === 'polygon' || tool === 'star' || tool === 'brush' || tool === 'eraser') {
+            optSection.style.display = 'block';
+            optPoly.style.display = tool === 'polygon' ? 'block' : 'none';
+            optStar.style.display = tool === 'star' ? 'block' : 'none';
+            optBrushSize.style.display = (tool === 'brush' || tool === 'eraser') ? 'block' : 'none';
+            optBrushStyle.style.display = tool === 'brush' ? 'block' : 'none';
+        }
+        else {
+            optSection.style.display = 'none';
+        }
+    }
+}
+// ── Panzoom ────────────────────────────────────────────────────────
+function initPanzoom(fitToView = false) {
+    panzoom?.destroy();
+    panzoom = null;
+    const svgEl = previewContainer.querySelector('svg');
+    const viewport = svgEl?.querySelector('#viewport');
+    if (!svgEl || !viewport)
+        return;
+    panzoom = Panzoom(svgEl, {
+        maxScale: 200, minScale: 0.02, step: 0.12,
+        setTransform: (elem, { scale, x, y }) => {
+            // Apply the transform to the viewport group, not the svg itself
+            if (viewport) {
+                viewport.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${x * scale}, ${y * scale})`);
+            }
+        },
+        handleStartEvent: (e) => {
+            const t = e.target;
+            // Never intercept handle or element clicks (editor handles those)
+            if (t.closest('[data-handle-id]'))
+                return false;
+            // Pan tool: allow everything
+            if (editor?.activeTool === 'pan')
+                return true;
+            // Select tool: allow panning only on empty canvas (not on elements)
+            if (editor?.activeTool === 'select') {
+                return !t.closest('[data-xcs-id]');
+            }
+            // Drawing tools: never allow panzoom to intercept
+            return false;
+        },
+    });
+    const wrapper = svgEl.parentElement;
+    wrapper.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (!panzoom)
+            return;
+        const rect = svgEl.getBoundingClientRect();
+        const px = e.clientX - rect.left;
+        const py = e.clientY - rect.top;
+        const oldScale = panzoom.getScale();
+        const pan = panzoom.getPan();
+        const oldTx = pan.x * oldScale;
+        const oldTy = pan.y * oldScale;
+        // Zoom speed step and boundaries
+        const zoomFactor = 1.15;
+        let newScale = oldScale;
+        if (e.deltaY < 0) {
+            newScale = Math.min(200, oldScale * zoomFactor);
+        }
+        else {
+            newScale = Math.max(0.02, oldScale / zoomFactor);
+        }
+        if (newScale === oldScale)
+            return;
+        // Compute mathematically perfect, visual-anchored translation
+        const newTx = px - (px - oldTx) * (newScale / oldScale);
+        const newTy = py - (py - oldTy) * (newScale / oldScale);
+        // Convert back to unscaled coordinate inputs expected by Panzoom
+        const newX = newTx / newScale;
+        const newY = newTy / newScale;
+        // Set scale and pan in a single layout frame to prevent jitter
+        panzoom.zoom(newScale, { animate: false });
+        panzoom.pan(newX, newY, { animate: false });
+        updateZoomDisplay();
+    }, { passive: false });
+    svgEl.addEventListener('panzoomchange', updateZoomDisplay);
+    if (fitToView) {
+        // Delay to ensure SVG is rendered
+        requestAnimationFrame(() => {
+            fitSvgToView(svgEl);
+        });
+    }
+    else {
+        updateZoomDisplay();
+    }
+}
+function fitSvgToView(svgEl) {
+    if (!panzoom)
+        return;
+    const viewport = svgEl.querySelector('#viewport');
+    if (!viewport)
+        return;
+    const container = svgEl.parentElement;
+    const cW = container.clientWidth;
+    const cH = container.clientHeight;
+    const bbox = viewport.getBBox();
+    let svgW = bbox.width;
+    let svgH = bbox.height;
+    if (svgW === 0 || svgH === 0) {
+        svgW = cW;
+        svgH = cH;
+    }
+    const padding = 40;
+    const scaleX = (cW - padding * 2) / svgW;
+    const scaleY = (cH - padding * 2) / svgH;
+    const scale = Math.min(scaleX, scaleY, 4); // cap at 4x
+    panzoom.zoom(scale, { animate: false });
+    panzoom.pan((cW - svgW * scale) / 2 - bbox.x * scale, (cH - svgH * scale) / 2 - bbox.y * scale, { animate: false });
+    updateZoomDisplay();
+    // Wait a brief moment for the UI to settle before offering the editor tour
+    setTimeout(() => runEditorTour(), 500);
+}
+function updateZoomDisplay() {
+    if (!panzoom)
+        return;
+    const scale = panzoom.getScale();
+    zoomDisplay.textContent = `${Math.round(scale * 100)}%`;
+}
+// ── Zoom Controls ─────────────────────────────────────────────────
+document.getElementById('btn-zoom-in').addEventListener('click', () => { panzoom?.zoomIn(); updateZoomDisplay(); });
+document.getElementById('btn-zoom-out').addEventListener('click', () => { panzoom?.zoomOut(); updateZoomDisplay(); });
+document.getElementById('btn-zoom-fit').addEventListener('click', () => {
+    const svgEl = previewContainer.querySelector('svg');
+    if (svgEl)
+        fitSvgToView(svgEl);
+});
+document.getElementById('btn-zoom-reset').addEventListener('click', () => {
+    panzoom?.zoom(1, { animate: true });
+    panzoom?.pan(0, 0, { animate: true });
+    updateZoomDisplay();
+});
+// ── Undo / Redo ───────────────────────────────────────────────────
+function pushUndo(svg) {
+    if (undoHistory.length && undoHistory[undoHistory.length - 1] === svg)
+        return;
+    undoHistory.push(svg);
+    if (undoHistory.length > MAX_HISTORY)
+        undoHistory.shift();
+    redoHistory = [];
+    updateHistoryBtns();
+    if (storageManager)
+        storageManager.saveWorkspace(JSON.stringify(convertedLayers));
+}
+function undo() {
+    if (undoHistory.length <= 1)
+        return;
+    const cur = undoHistory.pop();
+    redoHistory.push(cur);
+    applySvgState(undoHistory[undoHistory.length - 1]);
+    updateHistoryBtns();
+}
+function redo() {
+    if (!redoHistory.length)
+        return;
+    const next = redoHistory.pop();
+    undoHistory.push(next);
+    applySvgState(next);
+    updateHistoryBtns();
+}
+function applySvgState(svg) {
+    const layer = convertedLayers[activeLayerIndex];
+    if (!layer)
+        return;
+    // Capture current zoom and pan state
+    let currentScale = 1;
+    let currentPan = { x: 0, y: 0 };
+    if (panzoom) {
+        currentScale = panzoom.getScale();
+        currentPan = panzoom.getPan();
+    }
+    layer.svg = svg;
+    if (storageManager)
+        storageManager.saveWorkspace(JSON.stringify(convertedLayers));
+    previewContainer.innerHTML = svg;
+    editor?.setLayer(layer);
+    // Re-initialize panzoom without auto-fitting to view
+    initPanzoom(false);
+    // Restore captured state
+    if (panzoom) {
+        panzoom.zoom(currentScale, { animate: false });
+        panzoom.pan(currentPan.x, currentPan.y, { animate: false });
+        updateZoomDisplay();
+    }
+}
+function updateHistoryBtns() {
+    const undoBtn = document.getElementById('btn-undo');
+    const redoBtn = document.getElementById('btn-redo');
+    undoBtn.disabled = undoHistory.length <= 1;
+    redoBtn.disabled = redoHistory.length === 0;
+}
+// ── Actions ───────────────────────────────────────────────────────
+function exportAsFormat(format) {
+    const layer = convertedLayers[activeLayerIndex];
+    if (!layer)
+        return;
+    const svgText = getExportableSvg(layer.svg);
+    const filename = sanitize(layer.name);
+    if (format === 'svg') {
+        window.va?.('event', { name: 'export_svg', data: { layerName: layer.name, type: 'single' } });
+        dlSvg(svgText, `${filename}.svg`);
+        showToast('Vector SVG exported successfully!');
+    }
+    else if (format === 'source') {
+        const blob = new Blob([svgText], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${filename}_source.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast('Source text file exported!');
+    }
+    else if (format === 'copy') {
+        navigator.clipboard.writeText(svgText).then(() => {
+            showToast('SVG source copied to clipboard');
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = svgText;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand('copy');
+            document.body.removeChild(ta);
+            showToast('SVG source copied to clipboard');
+        });
+    }
+    else if (format === 'png' || format === 'jpeg') {
+        const img = new Image();
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+        const url = URL.createObjectURL(svgBlob);
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(svgText, 'image/svg+xml');
+            const svgEl = doc.documentElement;
+            let width = parseFloat(svgEl.getAttribute('width') || '800');
+            let height = parseFloat(svgEl.getAttribute('height') || '600');
+            if (svgEl.hasAttribute('viewBox')) {
+                const vb = svgEl.getAttribute('viewBox').split(/\s+/).map(Number);
+                if (vb.length === 4) {
+                    if (!width)
+                        width = vb[2];
+                    if (!height)
+                        height = vb[3];
+                }
+            }
+            const scale = 2; // High-DPI crisp scale
+            canvas.width = width * scale;
+            canvas.height = height * scale;
+            if (ctx) {
+                ctx.scale(scale, scale);
+                if (format === 'jpeg') {
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, width, height);
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                const mimeType = format === 'png' ? 'image/png' : 'image/jpeg';
+                const fileExt = format === 'png' ? 'png' : 'jpg';
+                const dataUrl = canvas.toDataURL(mimeType, 0.95);
+                const a = document.createElement('a');
+                a.href = dataUrl;
+                a.download = `${filename}.${fileExt}`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                showToast(`Raster ${format.toUpperCase()} image exported!`);
+            }
+            URL.revokeObjectURL(url);
+        };
+        img.onerror = () => {
+            showToast('Raster export failed. Falling back to SVG.');
+            dlSvg(svgText, `${filename}.svg`);
+            URL.revokeObjectURL(url);
+        };
+        img.src = url;
+    }
+}
+// ── Export Dropdown Events ───────────────────────────────────────
+const exportToggle = document.getElementById('btn-export-toggle');
+const exportDropdown = document.getElementById('export-dropdown');
+if (exportToggle && exportDropdown) {
+    exportToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        exportDropdown.classList.toggle('show');
+        const chevron = exportToggle.querySelector('.chevron-icon');
+        if (chevron) {
+            chevron.style.transform = exportDropdown.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+    });
+    const exportItems = document.querySelectorAll('.export-item');
+    exportItems.forEach(item => {
+        item.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const format = item.getAttribute('data-format');
+            exportAsFormat(format);
+            exportDropdown.classList.remove('show');
+            const chevron = exportToggle.querySelector('.chevron-icon');
+            if (chevron)
+                chevron.style.transform = 'rotate(0deg)';
+        });
+    });
+    document.addEventListener('click', () => {
+        exportDropdown.classList.remove('show');
+        const chevron = exportToggle.querySelector('.chevron-icon');
+        if (chevron)
+            chevron.style.transform = 'rotate(0deg)';
+    });
+}
+// ── Grid Settings Dropdown ───────────────────────────────────────
+const btnGridSettings = document.getElementById('btn-grid-settings');
+const gridSettingsMenu = document.getElementById('grid-settings-menu');
+if (btnGridSettings && gridSettingsMenu) {
+    btnGridSettings.addEventListener('click', (e) => {
+        e.stopPropagation();
+        gridSettingsMenu.classList.toggle('show');
+    });
+    gridSettingsMenu.addEventListener('click', (e) => e.stopPropagation());
+    document.addEventListener('click', () => {
+        gridSettingsMenu.classList.remove('show');
+    });
+}
+// ── Import Dropdown Events ───────────────────────────────────────
+const importToggle = document.getElementById('btn-import-toggle');
+const importDropdown = document.getElementById('import-dropdown');
+if (importToggle && importDropdown) {
+    importToggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        importDropdown.classList.toggle('show');
+        const chevron = importToggle.querySelector('.chevron-icon');
+        if (chevron) {
+            chevron.style.transform = importDropdown.classList.contains('show') ? 'rotate(180deg)' : 'rotate(0deg)';
+        }
+    });
+    const importItems = document.querySelectorAll('.import-item');
+    importItems.forEach(item => {
+        item.addEventListener('click', () => {
+            importDropdown.classList.remove('show');
+            const chevron = importToggle.querySelector('.chevron-icon');
+            if (chevron)
+                chevron.style.transform = 'rotate(0deg)';
+        });
+    });
+    document.addEventListener('click', () => {
+        importDropdown.classList.remove('show');
+        const chevron = importToggle.querySelector('.chevron-icon');
+        if (chevron)
+            chevron.style.transform = 'rotate(0deg)';
+    });
+}
+document.getElementById('btn-download-all').addEventListener('click', () => {
+    // Telemetry
+    window.va?.('event', { name: 'export_svg', data: { count: convertedLayers.length, type: 'all' } });
+    convertedLayers.forEach(l => dlSvg(getExportableSvg(l.svg), `${sanitize(l.name)}.svg`));
+    showToast(`Downloaded ${convertedLayers.length} SVG files`);
+});
+document.getElementById('btn-copy').addEventListener('click', async () => {
+    const layer = convertedLayers[activeLayerIndex];
+    if (!layer)
+        return;
+    const exportable = getExportableSvg(layer.svg);
+    try {
+        // Telemetry
+        window.va?.('event', { name: 'copy_svg_source', data: { layerName: layer.name } });
+        await navigator.clipboard.writeText(exportable);
+        showToast('SVG source copied to clipboard');
+    }
+    catch {
+        const ta = document.createElement('textarea');
+        ta.value = exportable;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('SVG source copied to clipboard');
+    }
+});
+document.getElementById('btn-reset').addEventListener('click', () => {
+    convertedLayers = [];
+    activeLayerIndex = 0;
+    studio.hidden = true;
+    dropZone.hidden = false;
+    headerFileActions.style.display = 'flex';
+    headerStudioActions.style.display = 'none';
+    headerLayerTabs.style.display = 'none';
+    fileInputXcs.value = '';
+    fileInputSvg.value = '';
+    previewContainer.innerHTML = '';
+    statsEl.innerHTML = '';
+    layerTabs.innerHTML = '';
+    editor = null;
+    propsEmpty.hidden = false;
+    propsSelection.hidden = true;
+});
+// ── Property Panel Binding ────────────────────────────────────────
+function populateProps(p) {
+    propElType.textContent = p.elementType;
+    propX.value = p.x.toFixed(2);
+    propY.value = p.y.toFixed(2);
+    propW.value = p.w.toFixed(2);
+    propH.value = p.h.toFixed(2);
+    propRotation.value = p.rotation.toFixed(1);
+    propOpacity.value = `${p.opacity}`;
+    const sc = ensureHex(p.strokeColor);
+    propStrokeColor.value = sc;
+    propStrokeHex.value = sc;
+    propStrokeW.value = p.strokeW.toFixed(2);
+    propStrokeOp.value = `${p.strokeOpacity}`;
+    propStrokeCap.value = p.strokeCap;
+    propStrokeJoin.value = p.strokeJoin;
+    propFillEnabled.checked = p.fillEnabled;
+    const fc = ensureHex(p.fillColor);
+    propFillColor.value = fc;
+    propFillHex.value = fc;
+    propFillOp.value = `${p.fillOpacity}`;
+    propFillRule.value = p.fillRule;
+}
+function bindPropInputs() {
+    const push = () => {
+        if (suppressPropUpdates)
+            return;
+        editor?.updateProperties({
+            x: parseFloat(propX.value),
+            y: parseFloat(propY.value),
+            w: parseFloat(propW.value),
+            h: parseFloat(propH.value),
+            rotation: parseFloat(propRotation.value || '0'),
+            opacity: parseFloat(propOpacity.value || '100'),
+            strokeColor: propStrokeColor.value,
+            strokeW: parseFloat(propStrokeW.value || '1'),
+            strokeOpacity: parseFloat(propStrokeOp.value || '100'),
+            strokeCap: propStrokeCap.value,
+            strokeJoin: propStrokeJoin.value,
+            fillEnabled: propFillEnabled.checked,
+            fillColor: propFillColor.value,
+            fillOpacity: parseFloat(propFillOp.value || '100'),
+            fillRule: propFillRule.value,
+        });
+    };
+    [propX, propY, propW, propH, propRotation, propOpacity,
+        propStrokeColor, propStrokeW, propStrokeOp, propStrokeCap, propStrokeJoin,
+        propFillEnabled, propFillColor, propFillOp, propFillRule].forEach(el => {
+        el.addEventListener('input', push);
+        el.addEventListener('change', push);
+    });
+    // Keep hex text fields in sync with color pickers and vice-versa
+    propStrokeColor.addEventListener('input', () => { propStrokeHex.value = propStrokeColor.value; });
+    propStrokeHex.addEventListener('input', () => {
+        if (/^#[0-9a-f]{6}$/i.test(propStrokeHex.value))
+            propStrokeColor.value = propStrokeHex.value;
+    });
+    propFillColor.addEventListener('input', () => { propFillHex.value = propFillColor.value; });
+    propFillHex.addEventListener('input', () => {
+        if (/^#[0-9a-f]{6}$/i.test(propFillHex.value))
+            propFillColor.value = propFillHex.value;
+    });
+    // Image adjustments
+    const propImgBrightness = document.getElementById('prop-brightness');
+    const propImgContrast = document.getElementById('prop-contrast');
+    const propImgBlur = document.getElementById('prop-blur');
+    if (propImgBrightness && propImgContrast && propImgBlur) {
+        const pushImgAdjustments = () => {
+            editor?.applyImageFilters(parseInt(propImgBrightness.value) || 0, parseInt(propImgContrast.value) || 0, parseInt(propImgBlur.value) || 0);
+        };
+        [propImgBrightness, propImgContrast, propImgBlur].forEach(el => {
+            el.addEventListener('change', pushImgAdjustments);
+        });
+    }
+    // Parametric Tools options
+    const propPolygonSides = document.getElementById('prop-polygon-sides');
+    const propStarPoints = document.getElementById('prop-star-points');
+    const propBrushSize = document.getElementById('prop-brush-size');
+    const propBrushStyle = document.getElementById('prop-brush-style');
+    if (propPolygonSides) {
+        propPolygonSides.addEventListener('input', () => {
+            if (editor)
+                editor.polygonSides = parseInt(propPolygonSides.value) || 5;
+        });
+    }
+    if (propStarPoints) {
+        propStarPoints.addEventListener('input', () => {
+            if (editor)
+                editor.starPoints = parseInt(propStarPoints.value) || 5;
+        });
+    }
+    if (propBrushSize) {
+        propBrushSize.addEventListener('input', () => {
+            if (editor)
+                editor.brushSize = parseInt(propBrushSize.value) || 12;
+        });
+    }
+    if (propBrushStyle) {
+        propBrushStyle.addEventListener('change', () => {
+            if (editor)
+                editor.brushStyle = propBrushStyle.value;
+        });
+    }
+}
+// ── Utilities ─────────────────────────────────────────────────────
+function dlSvg(content, filename) {
+    const blob = new Blob([content], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+function sanitize(name) { return name.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_'); }
+function esc(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function ensureHex(color) {
+    if (!color || color === 'none')
+        return '#000000';
+    if (color.startsWith('#') && color.length === 7)
+        return color;
+    if (color.startsWith('#') && color.length === 4) {
+        return '#' + color.slice(1).split('').map(c => c + c).join('');
+    }
+    // Try rgb()
+    const m = color.match(/rgb\((\d+),\s*(\d+),\s*(\d+)\)/);
+    if (m)
+        return '#' + [m[1], m[2], m[3]].map(n => parseInt(n).toString(16).padStart(2, '0')).join('');
+    return '#000000';
+}
+function showToast(msg, isError = false) {
+    const t = document.createElement('div');
+    t.className = `toast${isError ? ' is-error' : ''}`;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3200);
+}
+// ── Roadmap Page Controller ──────────────────────────────────────────
+const { divisions, phases } = parseRoadmap(roadmapMd);
+const roadmapPage = document.getElementById('roadmap-page');
+const btnRoadmap = document.getElementById('btn-roadmap');
+const btnRoadmapBack = document.getElementById('btn-roadmap-back');
+const tabDivisions = document.getElementById('tab-roadmap-divisions');
+const tabPhases = document.getElementById('tab-roadmap-phases');
+const viewDivisions = document.getElementById('view-roadmap-divisions');
+const viewPhases = document.getElementById('view-roadmap-phases');
+const sidebarDivisions = document.getElementById('roadmap-divisions-sidebar');
+const displayFeatures = document.getElementById('roadmap-features-display');
+const timelinePhases = document.getElementById('roadmap-phases-timeline');
+const searchRoadmap = document.getElementById('roadmap-search');
+const roadmapStats = document.getElementById('roadmap-stats');
+const featureModal = document.getElementById('roadmap-feature-modal');
+const modalCloseBtn = document.getElementById('modal-close-btn');
+const modalOverlay = featureModal.querySelector('.roadmap-modal-overlay');
+const modalFeatNum = document.getElementById('modal-feature-num');
+const modalFeatTitle = document.getElementById('modal-feature-title');
+const modalFeatStatus = document.getElementById('modal-feature-status');
+const modalFeatDiv = document.getElementById('modal-feature-div');
+const modalFeatReadme = document.getElementById('modal-feature-readme');
+const modalFeatUsage = document.getElementById('modal-feature-usage');
+const modalFeatTech = document.getElementById('modal-feature-tech');
+const modalFeatValue = document.getElementById('modal-feature-value');
+let activeDivisionId = 1;
+let currentSearchQuery = '';
+let activeFilter = 'all';
+// Close modal event listeners
+modalCloseBtn.addEventListener('click', () => {
+    featureModal.style.display = 'none';
+});
+modalOverlay.addEventListener('click', () => {
+    featureModal.style.display = 'none';
+});
+// Copy Technical Specification
+const btnCopySpec = document.getElementById('btn-copy-spec');
+btnCopySpec.addEventListener('click', async () => {
+    const code = modalFeatTech.textContent || '';
+    try {
+        await navigator.clipboard.writeText(code);
+        btnCopySpec.textContent = 'Copied!';
+        btnCopySpec.style.borderColor = '#00ff88';
+        btnCopySpec.style.color = '#00ff88';
+        setTimeout(() => {
+            btnCopySpec.textContent = 'Copy Spec';
+            btnCopySpec.style.borderColor = '';
+            btnCopySpec.style.color = '';
+        }, 1500);
+    }
+    catch (err) {
+        showToast('Failed to copy spec', true);
+    }
+});
+// Shared helper to launch modal from feature grids or timeline clicks
+function openFeatureModal(feat, div) {
+    let statusText = 'PLANNED';
+    let statusClass = 'planned';
+    if (COMPLETED_FEATURES.has(feat.id)) {
+        statusText = 'SHIPPED';
+        statusClass = 'complete';
+    }
+    else if (IN_PROGRESS_FEATURES.has(feat.id)) {
+        statusText = 'IN DEV';
+        statusClass = 'in-progress';
+    }
+    // Populate modal
+    modalFeatNum.textContent = `#${feat.id}`;
+    modalFeatTitle.textContent = feat.title;
+    // Status Badge
+    modalFeatStatus.textContent = statusText;
+    modalFeatStatus.className = `status-badge ${statusClass}`;
+    // Division Badge
+    modalFeatDiv.textContent = `Division ${div.id}: ${div.title}`;
+    // Readme & Usage Documentation
+    if (FEATURE_DOCS[feat.id]) {
+        modalFeatReadme.textContent = FEATURE_DOCS[feat.id].readme;
+        modalFeatUsage.textContent = FEATURE_DOCS[feat.id].usage;
+        modalFeatTech.textContent = FEATURE_DOCS[feat.id].tech;
+    }
+    else {
+        modalFeatReadme.textContent = "This feature is currently in the active planning phase. We are designing native integrations to satisfy this target soon!";
+        modalFeatUsage.textContent = "Usage guidelines will be made available as soon as this feature moves into the active deployment phase.";
+        modalFeatTech.textContent = `Technical Specifications:\n${feat.technicalIntegration}`;
+    }
+    // Value
+    modalFeatValue.textContent = feat.marketValue;
+    // Show Modal
+    featureModal.style.display = 'flex';
+    // Telemetry
+    window.va?.('event', { name: 'view_feature_readme', data: { id: feat.id, title: feat.title } });
+}
+// Route Navigation Triggers
+btnRoadmap.addEventListener('click', () => {
+    window.location.hash = 'roadmap';
+});
+btnRoadmapBack.addEventListener('click', () => {
+    window.location.hash = '';
+});
+// Client-Side Router
+function handleRouting() {
+    const hash = window.location.hash;
+    const studioApp = document.getElementById('app');
+    if (hash === '#roadmap') {
+        studioApp.style.display = 'none';
+        roadmapPage.style.display = 'flex';
+        initRoadmapUI();
+        window.va?.('event', { name: 'view_page', data: { page: 'roadmap' } });
+    }
+    else {
+        studioApp.style.display = 'flex';
+        roadmapPage.style.display = 'none';
+        window.va?.('event', { name: 'view_page', data: { page: 'studio' } });
+    }
+}
+window.addEventListener('hashchange', handleRouting);
+window.addEventListener('load', handleRouting);
+handleRouting(); // Immediate routing invocation for initial load
+// Tab navigation
+tabDivisions.addEventListener('click', () => switchRoadmapTab('divisions'));
+tabPhases.addEventListener('click', () => switchRoadmapTab('phases'));
+function switchRoadmapTab(tabName) {
+    if (tabName === 'divisions') {
+        tabDivisions.classList.add('active');
+        tabPhases.classList.remove('active');
+        viewDivisions.style.display = 'flex';
+        viewPhases.style.display = 'none';
+    }
+    else {
+        tabDivisions.classList.remove('active');
+        tabPhases.classList.add('active');
+        viewDivisions.style.display = 'none';
+        viewPhases.style.display = 'flex';
+        renderPhasesTimeline();
+    }
+}
+function initRoadmapUI() {
+    updateRoadmapStats();
+    renderDivisionsSidebar();
+    renderFeaturesList();
+}
+function updateRoadmapStats() {
+    if (!roadmapStats)
+        return;
+    const total = 140;
+    const completed = COMPLETED_FEATURES.size;
+    const pct = ((completed / total) * 100).toFixed(1);
+    roadmapStats.innerHTML = `
+    <div class="roadmap-stat-box">
+      <span class="roadmap-stat-label">Total Shipped</span>
+      <span class="roadmap-stat-value">${completed} / ${total} Features</span>
+    </div>
+    <div class="roadmap-stat-box">
+      <span class="roadmap-stat-label">Completion</span>
+      <span class="roadmap-stat-value">${pct}%</span>
+    </div>
+    <div class="roadmap-progress-bar-wrap">
+      <div class="roadmap-progress-bar-fill" style="width: ${pct}%;"></div>
+    </div>
+  `;
+}
+function renderDivisionsSidebar() {
+    sidebarDivisions.innerHTML = '';
+    divisions.forEach(div => {
+        const btn = document.createElement('button');
+        btn.className = `division-sidebar-btn${div.id === activeDivisionId ? ' active' : ''}`;
+        btn.innerHTML = `
+      <span class="sidebar-div-icon">${div.icon}</span>
+      <div class="sidebar-div-info">
+        <span class="sidebar-div-num">DIVISION ${div.id}</span>
+        <span class="sidebar-div-name">${div.title}</span>
+      </div>
+    `;
+        btn.addEventListener('click', () => {
+            activeDivisionId = div.id;
+            // Reset search on clicking division to let user browse division directly
+            searchRoadmap.value = '';
+            currentSearchQuery = '';
+            renderDivisionsSidebar();
+            renderFeaturesList();
+        });
+        sidebarDivisions.appendChild(btn);
+    });
+}
+function renderFeaturesList() {
+    displayFeatures.innerHTML = '';
+    let sourceFeatures = [];
+    if (currentSearchQuery) {
+        const q = currentSearchQuery.toLowerCase();
+        divisions.forEach(div => {
+            div.features.forEach(feat => {
+                const isNumSearch = q.startsWith('#');
+                const numToMatch = isNumSearch ? parseInt(q.slice(1)) : -1;
+                if (isNumSearch) {
+                    if (feat.id === numToMatch) {
+                        sourceFeatures.push({ feature: feat, division: div });
+                    }
+                }
+                else if (feat.title.toLowerCase().includes(q) ||
+                    feat.technicalIntegration.toLowerCase().includes(q) ||
+                    feat.marketValue.toLowerCase().includes(q) ||
+                    feat.id.toString() === q) {
+                    sourceFeatures.push({ feature: feat, division: div });
+                }
+            });
+        });
+        // Title card for search
+        const titleCard = document.createElement('div');
+        titleCard.className = 'division-intro-card';
+        titleCard.innerHTML = `
+      <h3>SEARCH RESULTS</h3>
+      <p>Found <b>${sourceFeatures.length}</b> features matching "${esc(currentSearchQuery)}" across all CAD divisions.</p>
+    `;
+        displayFeatures.appendChild(titleCard);
+    }
+    else {
+        // Render standard division list
+        const div = divisions.find(d => d.id === activeDivisionId);
+        if (!div)
+            return;
+        sourceFeatures = div.features.map(f => ({ feature: f, division: div }));
+        const introCard = document.createElement('div');
+        introCard.className = 'division-intro-card';
+        introCard.innerHTML = `
+      <h3>${div.icon} DIVISION ${div.id}: ${esc(div.title)}</h3>
+      <p>${esc(div.technicalIntro)}</p>
+    `;
+        displayFeatures.appendChild(introCard);
+    }
+    // Render interactive Quick Filters Toolbar
+    const allFeatures = sourceFeatures.map(item => item.feature);
+    renderQuickFilters(displayFeatures, allFeatures);
+    // Filter features based on activeFilter
+    const filteredFeatures = sourceFeatures.filter(item => {
+        if (activeFilter === 'complete') {
+            return COMPLETED_FEATURES.has(item.feature.id);
+        }
+        if (activeFilter === 'in-progress') {
+            return IN_PROGRESS_FEATURES.has(item.feature.id);
+        }
+        if (activeFilter === 'planned') {
+            return !COMPLETED_FEATURES.has(item.feature.id) && !IN_PROGRESS_FEATURES.has(item.feature.id);
+        }
+        return true; // 'all'
+    });
+    if (filteredFeatures.length === 0) {
+        const emptyGrid = document.createElement('div');
+        emptyGrid.className = 'features-grid';
+        emptyGrid.innerHTML = `
+      <div class="feature-card" style="grid-column: 1 / -1; text-align: center; padding: 32px; color: var(--text-secondary);">
+        <span style="font-family: var(--font-mono); font-size: 1.1rem; margin-bottom: 8px; display: block; opacity: 0.5;">[ NO FEATURE MATCHES ]</span>
+        No matching features match the selected filter criteria. Try resetting the active filter view.
+      </div>
+    `;
+        displayFeatures.appendChild(emptyGrid);
+        return;
+    }
+    const grid = document.createElement('div');
+    grid.className = 'features-grid';
+    filteredFeatures.forEach(({ feature, division }) => {
+        grid.appendChild(createFeatureCardElement(feature, division));
+    });
+    displayFeatures.appendChild(grid);
+}
+function renderQuickFilters(parent, featuresList) {
+    const row = document.createElement('div');
+    row.className = 'roadmap-quick-filters';
+    const allCount = featuresList.length;
+    const completeCount = featuresList.filter(f => COMPLETED_FEATURES.has(f.id)).length;
+    const inProgressCount = featuresList.filter(f => IN_PROGRESS_FEATURES.has(f.id)).length;
+    const plannedCount = allCount - completeCount - inProgressCount;
+    row.innerHTML = `
+    <button class="filter-btn${activeFilter === 'all' ? ' active' : ''}" data-filter="all">All (${allCount})</button>
+    <button class="filter-btn${activeFilter === 'complete' ? ' active' : ''}" data-filter="complete">Shipped (${completeCount})</button>
+    <button class="filter-btn${activeFilter === 'in-progress' ? ' active' : ''}" data-filter="in-progress">In Dev (${inProgressCount})</button>
+    <button class="filter-btn${activeFilter === 'planned' ? ' active' : ''}" data-filter="planned">Planned (${plannedCount})</button>
+  `;
+    row.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            activeFilter = btn.getAttribute('data-filter');
+            renderFeaturesList();
+        });
+    });
+    parent.appendChild(row);
+}
+function createFeatureCardElement(feat, div) {
+    const card = document.createElement('div');
+    card.className = 'feature-card';
+    let statusText = 'PLANNED';
+    let statusClass = 'planned';
+    if (COMPLETED_FEATURES.has(feat.id)) {
+        statusText = 'SHIPPED';
+        statusClass = 'complete';
+    }
+    else if (IN_PROGRESS_FEATURES.has(feat.id)) {
+        statusText = 'IN DEV';
+        statusClass = 'in-progress';
+    }
+    card.innerHTML = `
+    <div class="feature-card-header">
+      <span class="feature-card-title">${feat.id}. ${esc(feat.title)}</span>
+      <span class="status-badge ${statusClass}">${statusText}</span>
+    </div>
+    <div class="feature-field">
+      <span class="feature-field-label">TECHNICAL SPECIFICATION</span>
+      <span class="feature-field-value">${esc(feat.technicalIntegration)}</span>
+    </div>
+    <div class="feature-field">
+      <span class="feature-field-label">COMMERCIAL VALUE</span>
+      <span class="feature-field-value market">${esc(feat.marketValue)}</span>
+    </div>
+  `;
+    card.addEventListener('click', () => {
+        openFeatureModal(feat, div);
+    });
+    return card;
+}
+function renderPhasesTimeline() {
+    timelinePhases.innerHTML = '';
+    phases.forEach(phase => {
+        const node = document.createElement('div');
+        node.className = `phase-node${phase.id === 1 ? ' active' : ''}`;
+        const featTags = phase.features.map(fId => {
+            return `<span class="phase-feature-tag" data-feature-id="${fId}">#${fId}</span>`;
+        }).join(' ');
+        node.innerHTML = `
+      <div class="phase-indicator">${phase.id}</div>
+      <div class="phase-details-card">
+        <div class="phase-details-header">
+          <h3>PHASE ${phase.id}: ${esc(phase.name)}</h3>
+          <span class="phase-duration">${esc(phase.duration)}</span>
+        </div>
+        <div class="phase-focus">${esc(phase.focus)}</div>
+        <div class="phase-goal"><b>Phase Target:</b> ${esc(phase.goal)}</div>
+        <div class="phase-features-list">
+          <span style="font-size: 0.6rem; color: var(--text-muted); font-family: var(--font-mono); margin-right: 4px;">FEATURES INCLUDED:</span>
+          ${featTags}
+        </div>
+      </div>
+    `;
+        // Add click event to features tags
+        node.querySelectorAll('.phase-feature-tag').forEach(tag => {
+            tag.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const fId = parseInt(tag.getAttribute('data-feature-id'));
+                const div = divisions.find(d => d.features.some(f => f.id === fId));
+                if (div) {
+                    const feat = div.features.find(f => f.id === fId);
+                    activeDivisionId = div.id;
+                    switchRoadmapTab('divisions');
+                    initRoadmapUI();
+                    searchRoadmap.value = `#${fId}`;
+                    currentSearchQuery = `#${fId}`;
+                    renderFeaturesList();
+                    // Auto-open modal documentation on click
+                    openFeatureModal(feat, div);
+                }
+            });
+        });
+        timelinePhases.appendChild(node);
+    });
+}
+// Search binding
+searchRoadmap.addEventListener('input', () => {
+    currentSearchQuery = searchRoadmap.value.trim();
+    renderFeaturesList();
+});
+// ── Managers ──────────────────────────────────────────────────────
+let uiManager;
+let storageManager;
+let projectManager;
+let gridManager;
+// ── Startup ───────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Managers
+    uiManager = new UIManager();
+    storageManager = new StorageManager();
+    projectManager = new ProjectManager();
+    gridManager = new GridManager();
+    // Wire sidebar download project button
+    const btnDownloadProject = document.getElementById('btn-sidebar-download');
+    if (btnDownloadProject) {
+        btnDownloadProject.addEventListener('click', () => {
+            document.getElementById('btn-sidebar-close')?.click();
+            projectManager.exportProject(convertedLayers);
+        });
+    }
+    // Auto-recover workspace if exists
+    storageManager.loadWorkspace().then(state => {
+        if (state) {
+            try {
+                const layers = JSON.parse(state);
+                if (layers && layers.length > 0) {
+                    convertedLayers = layers;
+                    showStudio(0, 'Auto-Recovered Workspace');
+                    // Little toast message hack (if showToast exists, else skip)
+                    if (typeof showToast !== 'undefined')
+                        showToast('Restored previous session workspace.');
+                }
+            }
+            catch (e) {
+                console.error('Failed to parse auto-saved workspace', e);
+            }
+        }
+    });
+    // Wait for initial render, then trigger landing tour
+    setTimeout(() => runLandingTour(), 500);
+});
+//# sourceMappingURL=main.js.map

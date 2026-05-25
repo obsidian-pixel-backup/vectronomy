@@ -7,6 +7,9 @@
 
 import type { ConvertedLayer } from './types';
 import { parseSvgPath, absolutizePath, stringifySvgPath, extractNodes, PathCommand, PathNodeRef } from './pathUtils';
+import { RasterEngine } from './rasterEngine';
+import { Pathfinder, BooleanOp } from './pathfinder';
+import { LayoutEngine } from './layoutEngine';
 
 export interface ElementProperties {
   x: number;
@@ -65,19 +68,32 @@ export class VectorEditor {
   private nodeEditTarget: SVGPathElement | null = null;
 
   // Drawing state
-  activeTool: 'select' | 'pan' | 'rect' | 'circle' | 'line' | 'pen' | 'node' | 'polygon' | 'star' | 'spiral' | 'pencil' | 'polyline' = 'select';
+  activeTool: 'select' | 'pan' | 'rect' | 'circle' | 'line' | 'pen' | 'node' | 'polygon' | 'star' | 'spiral' | 'pencil' | 'polyline' | 'brush' | 'eraser' | 'magic-wand' | 'frame' = 'select';
   private isDrawing = false;
   private drawingEl: SVGElement | null = null;
   private drawStartX = 0;
   private drawStartY = 0;
   private penPoints: PenPoint[] = [];
   private penDraggingPoint: PenPoint | null = null;
+  public rasterEngine: RasterEngine = new RasterEngine();
 
   // Custom Shapes state
   polygonSides = 5;
   starPoints = 5;
   private pencilPoints: { x: number; y: number }[] = [];
   private polylinePoints: { x: number; y: number }[] = [];
+
+  // Brush/Eraser state
+  brushSize = 12;
+  brushStyle: 'round' | 'calligraphic' | 'flat' = 'round';
+  private magicWandThreshold: number = 20;
+  private brushPoints: { x: number; y: number }[] = [];
+  private eraserPoints: { x: number; y: number }[] = [];
+  
+  private snapFn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null = null;
+  public setSnapFunction(fn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null) {
+    this.snapFn = fn;
+  }
 
   constructor(
     container: HTMLElement,
@@ -144,12 +160,117 @@ export class VectorEditor {
     }
   }
 
+  // ── Universal Studio Features ─────────────────────────────────────
+  
+  public async pathfinderOperation(operation: BooleanOp) {
+    const els = this.getSelectedEls();
+    if (els.length < 2) return; // Need at least two shapes
+    
+    // Process from bottom to top or based on selection order.
+    // Here we'll just iteratively apply the operation.
+    let baseEl = els[0];
+    for (let i = 1; i < els.length; i++) {
+      const targetEl = els[i];
+      const resultSvgString = Pathfinder.performOperation(baseEl.outerHTML, targetEl.outerHTML, operation);
+      
+      if (resultSvgString) {
+        // Parse the result back into DOM
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
+        const newEl = doc.querySelector('path, rect, circle, ellipse, polygon');
+        if (newEl) {
+           newEl.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.random().toString(36).substr(2,6)}`);
+           // Replace the two old elements with the new one
+           const parent = baseEl.parentNode;
+           if (parent) {
+             parent.insertBefore(newEl, baseEl);
+             parent.removeChild(baseEl);
+             parent.removeChild(targetEl);
+           }
+           baseEl = newEl as SVGGraphicsElement;
+        }
+      }
+    }
+    this.clearSelection();
+    this.selectedIds.add(baseEl.getAttribute('data-xcs-id')!);
+    this.selectedId = baseEl.getAttribute('data-xcs-id')!;
+    this.renderSelectionUI();
+    this.commit();
+  }
+  
+  public applyImageFilters(brightness: number, contrast: number, blur: number) {
+    const els = this.getSelectedEls();
+    if (els.length !== 1) return;
+    const imgEl = els[0] as unknown as SVGImageElement;
+    if (imgEl.tagName.toLowerCase() !== 'image') return;
+    
+    this.rasterEngine.editImage(imgEl).then(() => {
+      this.rasterEngine.applyFilters(brightness, contrast, blur);
+      this.commit();
+    });
+  }
+  
+  public createFrameFromSelection() {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    const frame = LayoutEngine.createFrame(els);
+    if (frame) {
+      this.clearSelection();
+      this.selectedIds.add(frame.getAttribute('data-xcs-id')!);
+      this.selectedId = frame.getAttribute('data-xcs-id')!;
+      this.renderSelectionUI();
+      this.commit();
+    }
+  }
+
   // ── Mouse Handlers ────────────────────────────────────────────
 
   private onMouseDown(e: MouseEvent) {
     if (e.button === 1 || this.activeTool === 'pan') return;
     const target = e.target as SVGElement;
+    if (this.activeTool === 'magic-wand') {
+      const targetEl = target.closest('[data-xcs-id]') as SVGElement | null;
+      if (targetEl && targetEl.parentElement?.id === 'viewport') {
+        const targetFill = targetEl.getAttribute('fill') || 'none';
+        const targetStroke = targetEl.getAttribute('stroke') || 'none';
+        
+        if (!e.shiftKey) this.clearSelection();
+        
+        const allElements = document.getElementById('viewport')?.querySelectorAll('[data-xcs-id]');
+        if (allElements) {
+          allElements.forEach(el => {
+            const fill = el.getAttribute('fill') || 'none';
+            const stroke = el.getAttribute('stroke') || 'none';
+            // Select elements that share the same dominant color
+            if (targetFill !== 'none') {
+              if (fill === targetFill) this.selectedIds.add(el.getAttribute('data-xcs-id')!);
+            } else if (targetStroke !== 'none') {
+              if (stroke === targetStroke) this.selectedIds.add(el.getAttribute('data-xcs-id')!);
+            }
+          });
+        }
+        
+        if (this.selectedIds.size === 0) {
+          this.selectedIds.add(targetEl.getAttribute('data-xcs-id')!);
+        }
+        
+        if (this.selectedIds.size === 1) {
+          this.selectedId = Array.from(this.selectedIds)[0];
+          this.onSelectionChange(this.getElementProperties(this.selectedId));
+        } else {
+          this.selectedId = null;
+          this.onSelectionChange(this.getMultiSelectionProperties());
+        }
+        
+        this.renderSelectionUI();
+      } else if (!e.shiftKey) {
+        this.clearSelection();
+      }
+      return;
+    }
+
     if (this.activeTool !== 'select' && this.activeTool !== 'node') {
+      // Vector brush and eraser do not intercept raster edits anymore
       this.startDraw(e); return;
     }
     if (this.activeTool === 'node') {
@@ -341,6 +462,10 @@ export class VectorEditor {
   private onMouseMove(e: MouseEvent) {
     if (this.isDrawing && this.drawingEl) { this.updateDraw(e); return; }
     
+    if (this.isDrawing && (this.activeTool === 'brush' || this.activeTool === 'eraser')) {
+      // Handled by updateDraw
+    }
+    
     if (this.isMarquee && this.marqueeStart) {
       const pt = this.getSvgPoint(e);
       if (!pt) return;
@@ -430,6 +555,7 @@ export class VectorEditor {
   }
 
   private onMouseUp() {
+
     if (this.isDrawing) {
       if (this.activeTool === 'pen') {
         this.penDraggingPoint = null;
@@ -704,6 +830,7 @@ export class VectorEditor {
         this.renderPenOverlay(pt);
       } else {
         // Check for click on first point to close path
+        if (!this.penPoints.length) return;
         const p0 = this.penPoints[0];
         const dist = Math.sqrt((pt.x - p0.x) ** 2 + (pt.y - p0.y) ** 2);
         const scale = this.getScale();
@@ -768,6 +895,16 @@ export class VectorEditor {
     this.drawStartY = pt.y;
 
     switch (this.activeTool) {
+      case 'frame':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        this.drawingEl.setAttribute('x', `${pt.x}`);
+        this.drawingEl.setAttribute('y', `${pt.y}`);
+        this.drawingEl.setAttribute('width', '0');
+        this.drawingEl.setAttribute('height', '0');
+        this.drawingEl.setAttribute('fill', '#ffffff');
+        this.drawingEl.setAttribute('stroke', '#dcdcdc');
+        this.drawingEl.setAttribute('class', 'vectronomy-frame-preview');
+        break;
       case 'rect':
         this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
         this.drawingEl.setAttribute('x', `${pt.x}`);
@@ -806,13 +943,47 @@ export class VectorEditor {
         this.pencilPoints = [{ x: pt.x, y: pt.y }];
         this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
         break;
+      case 'brush':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        this.brushPoints = [{ x: pt.x, y: pt.y }];
+        this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
+        break;
+      case 'eraser':
+        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        this.eraserPoints = [{ x: pt.x, y: pt.y }];
+        this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
+        break;
     }
 
     if (this.drawingEl) {
       this.drawingEl.setAttribute('data-xcs-id', id);
-      this.drawingEl.setAttribute('stroke', '#00ffc2');
-      this.drawingEl.setAttribute('stroke-width', '1.5');
-      this.drawingEl.setAttribute('fill', 'none');
+      
+      if (this.activeTool === 'brush') {
+        this.drawingEl.setAttribute('stroke', this.currentStrokeColor);
+        this.drawingEl.setAttribute('stroke-width', this.brushSize.toString());
+        this.drawingEl.setAttribute('fill', 'none');
+        if (this.brushStyle === 'round') {
+          this.drawingEl.setAttribute('stroke-linecap', 'round');
+          this.drawingEl.setAttribute('stroke-linejoin', 'round');
+        } else if (this.brushStyle === 'flat') {
+          this.drawingEl.setAttribute('stroke-linecap', 'butt');
+          this.drawingEl.setAttribute('stroke-linejoin', 'miter');
+        } else if (this.brushStyle === 'calligraphic') {
+          this.drawingEl.setAttribute('stroke-linecap', 'square');
+          this.drawingEl.setAttribute('stroke-linejoin', 'bevel');
+        }
+      } else if (this.activeTool === 'eraser') {
+        this.drawingEl.setAttribute('stroke', 'rgba(255, 0, 0, 0.5)');
+        this.drawingEl.setAttribute('stroke-width', this.brushSize.toString());
+        this.drawingEl.setAttribute('fill', 'none');
+        this.drawingEl.setAttribute('stroke-linecap', 'round');
+        this.drawingEl.setAttribute('stroke-linejoin', 'round');
+      } else {
+        this.drawingEl.setAttribute('stroke', '#00ffc2');
+        this.drawingEl.setAttribute('stroke-width', '1.5');
+        this.drawingEl.setAttribute('fill', 'none');
+      }
+      
       viewport.appendChild(this.drawingEl);
     }
   }
@@ -869,6 +1040,7 @@ export class VectorEditor {
     }
 
     switch (this.activeTool) {
+      case 'frame':
       case 'rect': {
         const x = dx < 0 ? pt.x : this.drawStartX;
         const y = dy < 0 ? pt.y : this.drawStartY;
@@ -896,7 +1068,7 @@ export class VectorEditor {
         const r = Math.sqrt(dx * dx + dy * dy);
         const sides = this.polygonSides;
         const points: string[] = [];
-        const baseAngle = Math.atan2(dy, dx);
+        const baseAngle = e.shiftKey ? -Math.PI / 2 : Math.atan2(dy, dx);
         for (let i = 0; i < sides; i++) {
           const angle = baseAngle + i * (2 * Math.PI / sides);
           const px = this.drawStartX + r * Math.cos(angle);
@@ -911,7 +1083,7 @@ export class VectorEditor {
         const rIn = rOut * 0.4;
         const numPoints = this.starPoints;
         const points: string[] = [];
-        const baseAngle = Math.atan2(dy, dx);
+        const baseAngle = e.shiftKey ? -Math.PI / 2 : Math.atan2(dy, dx);
         const totalVertices = numPoints * 2;
         for (let i = 0; i < totalVertices; i++) {
           const angle = baseAngle + i * (Math.PI / numPoints);
@@ -949,6 +1121,16 @@ export class VectorEditor {
         this.drawingEl.setAttribute('d', d);
         break;
       }
+      case 'brush': {
+        this.brushPoints.push({ x: pt.x, y: pt.y });
+        this.drawingEl.setAttribute('d', this.getSmoothedPencilD(this.brushPoints));
+        break;
+      }
+      case 'eraser': {
+        this.eraserPoints.push({ x: pt.x, y: pt.y });
+        this.drawingEl.setAttribute('d', this.getSmoothedPencilD(this.eraserPoints));
+        break;
+      }
     }
   }
 
@@ -961,9 +1143,157 @@ export class VectorEditor {
       this.pencilPoints = [];
     }
     
+    if (this.activeTool === 'brush' && this.drawingEl && this.brushPoints.length > 1) {
+      if (this.brushStyle === 'calligraphic') {
+        const calligraphicD = this.getCalligraphicD(this.brushPoints, this.brushSize);
+        this.drawingEl.setAttribute('d', calligraphicD);
+        this.drawingEl.setAttribute('fill', this.currentStrokeColor);
+        this.drawingEl.setAttribute('stroke', 'none');
+      } else {
+        const smoothedD = this.getSmoothedPencilD(this.brushPoints);
+        this.drawingEl.setAttribute('d', smoothedD);
+      }
+      this.brushPoints = [];
+    }
+    
+    if (this.activeTool === 'eraser' && this.drawingEl && this.eraserPoints.length > 1) {
+      const eraserD = this.getSmoothedPencilD(this.eraserPoints);
+      const size = this.brushSize;
+      this.eraserPoints = [];
+      this.drawingEl.remove();
+      this.drawingEl = null;
+      this.isDrawing = false;
+      this.performVectorEraser(eraserD, size);
+      return;
+    }
+
+    if (this.activeTool === 'frame' && this.drawingEl) {
+      const mainSvg = this.container.querySelector('svg');
+      const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+      
+      const frameRect = this.drawingEl as SVGRectElement;
+      const rectX = parseFloat(frameRect.getAttribute('x') || '0');
+      const rectY = parseFloat(frameRect.getAttribute('y') || '0');
+      const rectW = parseFloat(frameRect.getAttribute('width') || '0');
+      const rectH = parseFloat(frameRect.getAttribute('height') || '0');
+      
+      if (rectW > 5 && rectH > 5) {
+        const containedEls: SVGGraphicsElement[] = [];
+        if (mainSvg) {
+          const allEls = mainSvg.querySelectorAll('[data-xcs-id]');
+          allEls.forEach(el => {
+            if (el === this.drawingEl) return;
+            if (el.tagName.toLowerCase() === 'path' && el.parentElement?.hasAttribute('data-xcs-id')) return;
+            if (el.classList.contains('vectronomy-frame')) return; // Avoid nesting frames for now
+            const box = this.getTransformedBBox(el as SVGGraphicsElement);
+            // Check intersection with drawn frame
+            if (box.x < rectX + rectW && box.x + box.width > rectX && box.y < rectY + rectH && box.y + box.height > rectY) {
+              containedEls.push(el as SVGGraphicsElement);
+            }
+          });
+        }
+
+        const frame = LayoutEngine.createFrameFromBounds(rectX, rectY, rectW, rectH, containedEls);
+        if (frame && viewport) {
+          viewport.appendChild(frame);
+          this.drawingEl.remove();
+          this.selectedIds.add(frame.getAttribute('data-xcs-id')!);
+          this.selectedId = frame.getAttribute('data-xcs-id')!;
+        }
+      } else {
+        this.drawingEl.remove();
+      }
+    }
+    
     this.isDrawing = false;
     this.drawingEl = null;
     this.commit();
+  }
+
+  private performVectorEraser(eraserPathD: string, size: number) {
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+    if (!viewport) return;
+
+    // Use a flat calligraphic projection to create a thick eraser path.
+    const eraserShapeD = this.getCalligraphicD(this.getPointsFromD(eraserPathD), size);
+    
+    const elements = Array.from(viewport.querySelectorAll('[data-xcs-id]'));
+    let modified = false;
+
+    const eraserSvgStr = `<svg xmlns="http://www.w3.org/2000/svg"><path d="${eraserShapeD}" fill="black" /></svg>`;
+
+    elements.forEach(el => {
+      if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline'].includes(el.tagName.toLowerCase())) {
+        const elSvgStr = `<svg xmlns="http://www.w3.org/2000/svg">${el.outerHTML}</svg>`;
+        const result = Pathfinder.performOperation(elSvgStr, eraserSvgStr, 'subtract');
+        if (result) {
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(result, 'image/svg+xml');
+          const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline')) as SVGElement[];
+          if (newPaths.length > 0) {
+            const originalId = el.getAttribute('data-xcs-id');
+            const originalStroke = el.getAttribute('stroke');
+            const originalFill = el.getAttribute('fill');
+            const originalStrokeWidth = el.getAttribute('stroke-width');
+            
+            // If completely erased (Pathfinder may return an empty path `<path d=""/>`)
+            if (newPaths.length === 1 && (!newPaths[0].getAttribute('d') || newPaths[0].getAttribute('d')!.length < 2)) {
+                el.remove();
+            } else {
+                const fragment = document.createDocumentFragment();
+                newPaths.forEach((np, i) => {
+                    if (originalStroke) np.setAttribute('stroke', originalStroke);
+                    if (originalFill) np.setAttribute('fill', originalFill);
+                    if (originalStrokeWidth) np.setAttribute('stroke-width', originalStrokeWidth);
+                    if (i === 0 && originalId) np.setAttribute('data-xcs-id', originalId);
+                    else np.setAttribute('data-xcs-id', `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+                    fragment.appendChild(np);
+                });
+                el.replaceWith(fragment);
+            }
+            modified = true;
+          } else {
+            el.remove();
+            modified = true;
+          }
+        }
+      }
+    });
+
+    if (modified) this.commit();
+  }
+
+  private getPointsFromD(d: string): {x: number, y: number}[] {
+      const parts = d.split(/[A-Za-z]/).filter(p => p.trim() !== '');
+      const pts: {x: number, y: number}[] = [];
+      parts.forEach(part => {
+          const coords = part.trim().split(' ').filter(c => c.trim() !== '');
+          for (let i=0; i<coords.length; i+=2) {
+              if (coords[i] && coords[i+1]) {
+                  pts.push({x: parseFloat(coords[i]), y: parseFloat(coords[i+1])});
+              }
+          }
+      });
+      return pts;
+  }
+
+  private getCalligraphicD(pts: { x: number; y: number }[], size: number): string {
+    if (pts.length < 2) return '';
+    const angle = Math.PI / 4; // 45 degrees
+    const dx = Math.cos(angle) * (size / 2);
+    const dy = Math.sin(angle) * (size / 2);
+
+    const topPts = pts.map(p => ({ x: p.x - dx, y: p.y - dy }));
+    const bottomPts = pts.map(p => ({ x: p.x + dx, y: p.y + dy })).reverse();
+
+    const allPts = [...topPts, ...bottomPts];
+    let d = `M ${allPts[0].x.toFixed(1)} ${allPts[0].y.toFixed(1)}`;
+    for (let i = 1; i < allPts.length; i++) {
+      d += ` L ${allPts[i].x.toFixed(1)} ${allPts[i].y.toFixed(1)}`;
+    }
+    d += ' Z';
+    return d;
   }
 
   finalizePolyline() {
@@ -1245,7 +1575,13 @@ export class VectorEditor {
       pt.x = (e as TouchEvent).touches[0].clientX;
       pt.y = (e as TouchEvent).touches[0].clientY;
     }
-    return pt.matrixTransform((viewport as SVGGraphicsElement).getScreenCTM()!.inverse());
+    const transformed = pt.matrixTransform((viewport as SVGGraphicsElement).getScreenCTM()!.inverse());
+    if (this.snapFn) {
+      const snapped = this.snapFn({ x: transformed.x, y: transformed.y });
+      transformed.x = snapped.x;
+      transformed.y = snapped.y;
+    }
+    return transformed;
   }
 
   private getSelectedEls(): SVGGraphicsElement[] {

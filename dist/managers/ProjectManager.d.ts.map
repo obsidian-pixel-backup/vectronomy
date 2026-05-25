@@ -1,0 +1,1 @@
+{"version":3,"file":"ProjectManager.d.ts","sourceRoot":"","sources":["../../src/managers/ProjectManager.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,iBAAiB,CAAC;AAEtD,qBAAa,cAAc;IACzB;;;OAGG;IACI,aAAa,CAAC,MAAM,EAAE,cAAc,EAAE,GAAG,IAAI;IAqBpD;;OAEG;IACI,aAAa,CAAC,IAAI,EAAE,IAAI,GAAG,OAAO,CAAC,cAAc,EAAE,CAAC;CAsB5D"}
