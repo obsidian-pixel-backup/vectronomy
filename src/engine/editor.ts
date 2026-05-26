@@ -1052,6 +1052,7 @@ export class VectorEditor {
       case 'eraser':
         this.eraserPoints = [{ x: pt.x, y: pt.y }];
         this.eraserModified = false;
+        this.eraserCache.clear(); // Clear cache at start of stroke
         this.performVectorEraser(this.eraserPoints, this.brushSize);
         // Do not create drawingEl for eraser
         break;
@@ -1316,6 +1317,8 @@ export class VectorEditor {
     this.onDrawingChange?.();
   }
 
+  private eraserCache = new Map<Element, { bbox: DOMRect, isStrokeOnly: boolean }>();
+
   private performVectorEraser(points: {x: number, y: number}[], size: number) {
     const mainSvg = this.container.querySelector('svg');
     const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
@@ -1329,7 +1332,7 @@ export class VectorEditor {
       if (p.y < eyMin) eyMin = p.y;
       if (p.y > eyMax) eyMax = p.y;
     }
-    const erPadding = size / 2;
+    const erPadding = size; // Padding to ensure we catch edges
     exMin -= erPadding; exMax += erPadding;
     eyMin -= erPadding; eyMax += erPadding;
 
@@ -1357,9 +1360,17 @@ export class VectorEditor {
     elements.forEach(el => {
       if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line'].includes(el.tagName.toLowerCase())) {
         
+        let cached = this.eraserCache.get(el);
+        if (!cached) {
+          const elBox = this.getBBoxInViewport(el as SVGGraphicsElement, viewport as SVGGElement);
+          const computedStyle = window.getComputedStyle(el);
+          const isStrokeOnly = computedStyle.fill === 'none' || computedStyle.fill === 'rgba(0, 0, 0, 0)' || computedStyle.fill === 'transparent';
+          cached = { bbox: elBox, isStrokeOnly };
+          this.eraserCache.set(el, cached);
+        }
+
         // Skip elements that don't intersect the eraser's bounding box
-        const elBox = this.getBBoxInViewport(el as SVGGraphicsElement, viewport as SVGGElement);
-        if (elBox.x + elBox.width < exMin || elBox.x > exMax || elBox.y + elBox.height < eyMin || elBox.y > eyMax) {
+        if (cached.bbox.x + cached.bbox.width < exMin || cached.bbox.x > exMax || cached.bbox.y + cached.bbox.height < eyMin || cached.bbox.y > eyMax) {
           return;
         }
 
@@ -1410,10 +1421,12 @@ export class VectorEditor {
                     fragment.appendChild(np);
                 });
                 el.replaceWith(fragment);
+                this.eraserCache.delete(el);
             }
             this.eraserModified = true;
           } else {
             el.remove();
+            this.eraserCache.delete(el);
             this.eraserModified = true;
           }
         }
