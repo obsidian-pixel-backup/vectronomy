@@ -51,8 +51,16 @@ export class Pathfinder {
   }
 
   private static findPath(item: paper.Item): paper.PathItem | null {
-    if (item instanceof paper.PathItem) return item;
-    if (item instanceof paper.Shape) return item.toPath();
+    if (item instanceof paper.PathItem) {
+      const cloned = item.clone({ insert: false }) as paper.PathItem;
+      cloned.transform(item.globalMatrix);
+      return cloned;
+    }
+    if (item instanceof paper.Shape) {
+      const path = item.toPath(false);
+      path.transform(item.globalMatrix);
+      return path;
+    }
     if (item.children) {
       let combined: paper.PathItem | null = null;
       for (const child of item.children) {
@@ -61,7 +69,7 @@ export class Pathfinder {
           if (!combined) {
             combined = found;
           } else {
-            combined = combined.unite(found);
+            combined = combined.unite(found, { insert: false }) as paper.PathItem;
           }
         }
       }

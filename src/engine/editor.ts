@@ -105,7 +105,8 @@ export class VectorEditor {
     onUpdate: (svg: string) => void,
     onSelectionChange: (props: ElementProperties | null) => void,
     onInteractionStart: () => void,
-    onInteractionEnd: () => void
+    onInteractionEnd: () => void,
+    private onDrawingChange?: () => void
   ) {
     this.container = container;
     this.onUpdate = onUpdate;
@@ -150,6 +151,7 @@ export class VectorEditor {
     this.penPoints = [];
     this.penDraggingPoint = null;
     this.renderPenOverlay(); // Clear overlay
+    this.onDrawingChange?.();
     if (tool !== 'select' && tool !== 'pan') this.onInteractionStart();
     else this.onInteractionEnd();
 
@@ -843,6 +845,7 @@ export class VectorEditor {
         this.drawingEl.setAttribute('d', `M${pt.x},${pt.y}`);
         viewport.appendChild(this.drawingEl);
         this.renderPenOverlay(pt);
+        this.onDrawingChange?.();
       } else {
         // Check for click on first point to close path
         if (!this.penPoints.length) return;
@@ -871,6 +874,7 @@ export class VectorEditor {
         const d = this.getPathD(this.penPoints);
         this.drawingEl!.setAttribute('d', d);
         this.renderPenOverlay(pt);
+        this.onDrawingChange?.();
       }
       return;
     }
@@ -887,6 +891,7 @@ export class VectorEditor {
         this.polylinePoints = [{ x: pt.x, y: pt.y }];
         this.drawingEl.setAttribute('points', `${pt.x.toFixed(1)},${pt.y.toFixed(1)}`);
         viewport.appendChild(this.drawingEl);
+        this.onDrawingChange?.();
       } else {
         const p0 = this.polylinePoints[0];
         const dist = Math.sqrt((pt.x - p0.x) ** 2 + (pt.y - p0.y) ** 2);
@@ -901,6 +906,7 @@ export class VectorEditor {
         this.polylinePoints.push({ x: pt.x, y: pt.y });
         const ptsStr = this.polylinePoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
         this.drawingEl!.setAttribute('points', ptsStr);
+        this.onDrawingChange?.();
       }
       return;
     }
@@ -1225,6 +1231,7 @@ export class VectorEditor {
     this.isDrawing = false;
     this.drawingEl = null;
     this.commit();
+    this.onDrawingChange?.();
   }
 
   private performVectorEraser(eraserPathD: string, size: number) {
@@ -1258,7 +1265,7 @@ export class VectorEditor {
         eraserShapeD += `M ${prev.x + dx} ${prev.y + dy} L ${prev.x - dx} ${prev.y - dy} L ${p.x - dx} ${p.y - dy} L ${p.x + dx} ${p.y + dy} Z `;
       }
     }
-    const eraserSvgStr = `<svg xmlns="http://www.w3.org/2000/svg"><path d="${eraserShapeD}" fill="black" fill-rule="nonzero" /></svg>`;
+    const eraserShapes = `<path d="${eraserShapeD}" fill="black" fill-rule="nonzero" />`;
     
     const elements = Array.from(viewport.querySelectorAll('[data-xcs-id]'));
     let modified = false;
@@ -1267,13 +1274,26 @@ export class VectorEditor {
       if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline'].includes(el.tagName.toLowerCase())) {
         
         // Skip elements that don't intersect the eraser's bounding box
-        const elBox = this.getTransformedBBox(el as SVGGraphicsElement);
+        const elBox = this.getBBoxInViewport(el as SVGGraphicsElement, viewport as SVGGElement);
         if (elBox.x + elBox.width < exMin || elBox.x > exMax || elBox.y + elBox.height < eyMin || elBox.y > eyMax) {
           return;
         }
 
-        const elSvgStr = `<svg xmlns="http://www.w3.org/2000/svg">${el.outerHTML}</svg>`;
-        const result = Pathfinder.performOperation(elSvgStr, eraserSvgStr, 'subtract');
+        // We must convert the eraser to el's local space because elSvgStr lacks parent transforms!
+        const ctmEl = (el as SVGGraphicsElement).getCTM();
+        const ctmViewport = (viewport as SVGGElement).getCTM();
+        if (!ctmEl || !ctmViewport) return;
+        
+        const localMat = ctmEl.inverse().multiply(ctmViewport);
+        const matrixStr = `matrix(${localMat.a} ${localMat.b} ${localMat.c} ${localMat.d} ${localMat.e} ${localMat.f})`;
+        
+        const localEraserSvgStr = `<svg xmlns="http://www.w3.org/2000/svg"><g transform="${matrixStr}">${eraserShapes}</g></svg>`;
+        
+        const elClone = el.cloneNode(true) as SVGElement;
+        elClone.removeAttribute('transform');
+        const elSvgStr = `<svg xmlns="http://www.w3.org/2000/svg">${elClone.outerHTML}</svg>`;
+        
+        const result = Pathfinder.performOperation(elSvgStr, localEraserSvgStr, 'subtract');
         if (result) {
           const parser = new DOMParser();
           const doc = parser.parseFromString(result, 'image/svg+xml');
@@ -1290,9 +1310,12 @@ export class VectorEditor {
             } else {
                 const fragment = document.createDocumentFragment();
                 newPaths.forEach((np, i) => {
-                    if (originalStroke) np.setAttribute('stroke', originalStroke);
-                    if (originalFill) np.setAttribute('fill', originalFill);
-                    if (originalStrokeWidth) np.setAttribute('stroke-width', originalStrokeWidth);
+                    Array.from(el.attributes).forEach(attr => {
+                        if (attr.name !== 'id' && attr.name !== 'd' && attr.name !== 'data-xcs-id') {
+                            np.setAttribute(attr.name, attr.value);
+                        }
+                    });
+                    
                     if (i === 0 && originalId) np.setAttribute('data-xcs-id', originalId);
                     else np.setAttribute('data-xcs-id', `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
                     fragment.appendChild(np);
@@ -1471,6 +1494,7 @@ export class VectorEditor {
         if (this.drawingEl) this.drawingEl.setAttribute('d', d);
       }
     }
+    this.onDrawingChange?.();
   }
 
   public cancelDrawing(): void {
@@ -1482,6 +1506,7 @@ export class VectorEditor {
     this.penPoints = [];
     this.polylinePoints = [];
     this.renderPenOverlay();
+    this.onDrawingChange?.();
   }
 
   private finalizePenPath() {
@@ -1498,6 +1523,7 @@ export class VectorEditor {
     this.drawingEl = null;
     this.penDraggingPoint = null;
     this.renderPenOverlay(); // Clear overlay
+    this.onDrawingChange?.();
   }
 
   private renderPenOverlay(ptMouse?: { x: number; y: number }) {
@@ -1997,6 +2023,34 @@ export class VectorEditor {
     const matrix = el.transform.baseVal.consolidate()?.matrix;
     if (!matrix) return bbox;
 
+    const pts = [
+      { x: bbox.x, y: bbox.y },
+      { x: bbox.x + bbox.width, y: bbox.y },
+      { x: bbox.x, y: bbox.y + bbox.height },
+      { x: bbox.x + bbox.width, y: bbox.y + bbox.height }
+    ];
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of pts) {
+      const nx = matrix.a * p.x + matrix.c * p.y + matrix.e;
+      const ny = matrix.b * p.x + matrix.d * p.y + matrix.f;
+      if (nx < minX) minX = nx;
+      if (nx > maxX) maxX = nx;
+      if (ny < minY) minY = ny;
+      if (ny > maxY) maxY = ny;
+    }
+
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  private getBBoxInViewport(el: SVGGraphicsElement, viewport: SVGGElement) {
+    const bbox = el.getBBox();
+    const ctmEl = el.getCTM();
+    const ctmViewport = viewport.getCTM();
+    if (!ctmEl || !ctmViewport) return bbox;
+    
+    const matrix = ctmViewport.inverse().multiply(ctmEl);
+    
     const pts = [
       { x: bbox.x, y: bbox.y },
       { x: bbox.x + bbox.width, y: bbox.y },

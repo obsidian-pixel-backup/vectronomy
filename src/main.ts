@@ -613,8 +613,9 @@ function initEditor() {
       }
       suppressPropUpdates = false;
     },
-    () => { if (panzoom) panzoom.setOptions({ disablePan: true }); },
-    () => { if (panzoom) panzoom.setOptions({ disablePan: false }); }
+    () => { currentDisablePan = true; if (panzoom) panzoom.setOptions({ disablePan: true }); },
+    () => { currentDisablePan = false; if (panzoom) panzoom.setOptions({ disablePan: false }); },
+    () => { updateHistoryBtns(); }
   );
 
   editor.setSnapFunction((pt) => gridManager.snapPoint(pt));
@@ -849,6 +850,8 @@ function updateToolOptionsUI(tool: string) {
 
 // ── Panzoom ────────────────────────────────────────────────────────
 
+let currentDisablePan = false;
+
 function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) {
   panzoom?.destroy();
   panzoom = null;
@@ -860,6 +863,7 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
   panzoom = Panzoom(svgEl, {
     maxScale: 200, minScale: 0.02, step: 0.12,
     startScale, startX, startY,
+    disablePan: currentDisablePan,
     setTransform: (elem, { scale, x, y }) => {
       // Apply the transform to the viewport group, not the svg itself
       if (viewport) {
@@ -868,16 +872,9 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
     },
     handleStartEvent: (e: any) => {
       const t = e.target as SVGElement;
-      // Never intercept handle or element clicks (editor handles those)
-      if (t.closest('[data-handle-id]')) return false;
-      // Pan tool: allow everything
-      if (editor?.activeTool === 'pan') return true;
-      // Select tool: allow panning only on empty canvas (not on elements)
-      if (editor?.activeTool === 'select') {
-        return !t.closest('[data-xcs-id]');
-      }
-      // Drawing tools: never allow panzoom to intercept
-      return false;
+      if (t.closest('[data-handle-id]')) return;
+      if (editor?.activeTool === 'pan') { e.preventDefault(); return; }
+      if (editor?.activeTool === 'select' && !t.closest('[data-xcs-id]')) { e.preventDefault(); return; }
     },
   });
 
@@ -1064,7 +1061,7 @@ function applySvgState(svg: string) {
 function updateHistoryBtns() {
   const undoBtn = document.getElementById('btn-undo') as HTMLButtonElement;
   const redoBtn = document.getElementById('btn-redo') as HTMLButtonElement;
-  undoBtn.disabled = undoHistory.length <= 1;
+  undoBtn.disabled = !(undoHistory.length > 1 || (editor && editor.canUndoDrawing()));
   redoBtn.disabled = redoHistory.length === 0;
 }
 
