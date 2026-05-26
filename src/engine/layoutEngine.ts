@@ -69,6 +69,7 @@ export class LayoutEngine {
     bgRect.setAttribute('width', width.toString());
     bgRect.setAttribute('height', height.toString());
     bgRect.setAttribute('fill', '#ffffff');
+    bgRect.setAttribute('stroke', '#dcdcdc');
     bgRect.setAttribute('class', 'frame-background');
     
     // Content group

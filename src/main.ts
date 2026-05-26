@@ -98,19 +98,11 @@ let suppressPropUpdates = false;
 // ── File Import ──────────────────────────────────────────────────
 
 // Header buttons removed
-document.getElementById('btn-help')!.addEventListener('click', () => showHelpRoute());
+document.getElementById('btn-help')!.addEventListener('click', () => navigateTo('/help'));
 
 // Help Route Bindings
 btnCloseHelp?.addEventListener('click', () => {
-  helpRoute.setAttribute('hidden', '');
-  if (convertedLayers.length > 0 || editor) {
-    studio.removeAttribute('hidden');
-    // Ensure panzoom resizes properly after unhiding
-    if (panzoom) requestAnimationFrame(() => panzoom!.pan(panzoom!.getPan().x, panzoom!.getPan().y));
-  } else {
-    landingPage.removeAttribute('hidden');
-    dropZone.removeAttribute('hidden');
-  }
+  navigateTo('/');
 });
 
 helpNavItems.forEach(btn => {
@@ -141,10 +133,7 @@ btnTourEditor?.addEventListener('click', () => {
 });
 
 function showHelpRoute() {
-  dropZone.setAttribute('hidden', '');
-  landingPage.setAttribute('hidden', '');
-  studio.setAttribute('hidden', '');
-  helpRoute.removeAttribute('hidden');
+  navigateTo('/help');
 }
 
 // Drop zone buttons
@@ -860,7 +849,7 @@ function updateToolOptionsUI(tool: string) {
 
 // ── Panzoom ────────────────────────────────────────────────────────
 
-function initPanzoom(fitToView = false) {
+function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) {
   panzoom?.destroy();
   panzoom = null;
 
@@ -870,6 +859,7 @@ function initPanzoom(fitToView = false) {
 
   panzoom = Panzoom(svgEl, {
     maxScale: 200, minScale: 0.02, step: 0.12,
+    startScale, startX, startY,
     setTransform: (elem, { scale, x, y }) => {
       // Apply the transform to the viewport group, not the svg itself
       if (viewport) {
@@ -957,23 +947,41 @@ function fitSvgToView(svgEl: SVGSVGElement) {
     return;
   }
 
-  const bbox = viewport.getBBox();
-  let svgW = bbox.width;
-  let svgH = bbox.height;
+  let bbox;
+  try {
+    bbox = viewport.getBBox();
+  } catch (e) {
+    bbox = { x: 0, y: 0, width: 0, height: 0 };
+  }
+  
+  let svgW = bbox.width || 0;
+  let svgH = bbox.height || 0;
+  let svgX = bbox.x || 0;
+  let svgY = bbox.y || 0;
 
-  if (svgW === 0 || svgH === 0) { svgW = cW; svgH = cH; }
+  if (svgW === 0 || svgH === 0 || isNaN(svgW) || isNaN(svgH)) { 
+    svgW = cW; 
+    svgH = cH; 
+  }
+  if (isNaN(svgX)) svgX = 0;
+  if (isNaN(svgY)) svgY = 0;
 
   const padding = 40;
   const scaleX = (cW - padding * 2) / svgW;
   const scaleY = (cH - padding * 2) / svgH;
-  const scale = Math.min(scaleX, scaleY, 4); // cap at 4x
+  let scale = Math.min(scaleX, scaleY, 4); // cap at 4x
+  
+  if (isNaN(scale) || !isFinite(scale)) scale = 1;
 
   panzoom.zoom(scale, { animate: false });
-  panzoom.pan(
-    (cW - svgW * scale) / 2 - bbox.x * scale,
-    (cH - svgH * scale) / 2 - bbox.y * scale,
-    { animate: false }
-  );
+  
+  let panX = (cW - svgW * scale) / 2 - svgX * scale;
+  let panY = (cH - svgH * scale) / 2 - svgY * scale;
+  
+  if (isNaN(panX)) panX = 0;
+  if (isNaN(panY)) panY = 0;
+  
+  panzoom.pan(panX, panY, { animate: false });
   updateZoomDisplay();
   
   // Wait a brief moment for the UI to settle before offering the editor tour
@@ -1012,6 +1020,10 @@ function pushUndo(svg: string) {
 }
 
 function undo() {
+  if (editor && editor.canUndoDrawing()) {
+    editor.undoDrawing();
+    return;
+  }
   if (undoHistory.length <= 1) return;
   const cur = undoHistory.pop()!;
   redoHistory.push(cur);
@@ -1044,15 +1056,9 @@ function applySvgState(svg: string) {
   previewContainer.innerHTML = svg;
   editor?.setLayer(layer);
   
-  // Re-initialize panzoom without auto-fitting to view
-  initPanzoom(false);
-  
-  // Restore captured state
-  if (panzoom) {
-    panzoom.zoom(currentScale, { animate: false });
-    panzoom.pan(currentPan.x, currentPan.y, { animate: false });
-    updateZoomDisplay();
-  }
+  // Re-initialize panzoom without auto-fitting to view, but preserving state
+  initPanzoom(false, currentScale, currentPan.x, currentPan.y);
+  updateZoomDisplay();
 }
 
 function updateHistoryBtns() {
@@ -1552,33 +1558,56 @@ function openFeatureModal(feat: Feature, div: Division) {
 }
 
 // Route Navigation Triggers
+export function navigateTo(path: string) {
+  window.history.pushState({}, '', path);
+  handleRouting();
+}
+
 btnRoadmap?.addEventListener('click', () => {
   document.getElementById('btn-sidebar-close')?.click();
-  window.location.hash = 'roadmap';
+  navigateTo('/roadmap');
 });
 
 btnRoadmapBack?.addEventListener('click', () => {
-  window.location.hash = '';
+  navigateTo('/');
 });
 
 // Client-Side Router
 function handleRouting() {
-  const hash = window.location.hash;
+  const path = window.location.pathname;
   const studioApp = document.getElementById('app') as HTMLElement;
   
-  if (hash === '#roadmap') {
+  if (path === '/roadmap') {
     studioApp.style.display = 'none';
+    helpRoute.setAttribute('hidden', '');
     roadmapPage.style.display = 'flex';
     initRoadmapUI();
     (window as any).va?.('event', { name: 'view_page', data: { page: 'roadmap' } });
+  } else if (path === '/help') {
+    studioApp.style.display = 'flex';
+    dropZone.setAttribute('hidden', '');
+    landingPage.setAttribute('hidden', '');
+    studio.setAttribute('hidden', '');
+    roadmapPage.style.display = 'none';
+    helpRoute.removeAttribute('hidden');
+    (window as any).va?.('event', { name: 'view_page', data: { page: 'help' } });
   } else {
     studioApp.style.display = 'flex';
     roadmapPage.style.display = 'none';
+    helpRoute.setAttribute('hidden', '');
+    
+    if (convertedLayers.length > 0 || editor) {
+      studio.removeAttribute('hidden');
+      if (panzoom) requestAnimationFrame(() => panzoom!.pan(panzoom!.getPan().x, panzoom!.getPan().y));
+    } else {
+      landingPage.removeAttribute('hidden');
+      dropZone.removeAttribute('hidden');
+    }
     (window as any).va?.('event', { name: 'view_page', data: { page: 'studio' } });
   }
 }
 
-window.addEventListener('hashchange', handleRouting);
+window.addEventListener('popstate', handleRouting);
 window.addEventListener('load', handleRouting);
 handleRouting(); // Immediate routing invocation for initial load
 

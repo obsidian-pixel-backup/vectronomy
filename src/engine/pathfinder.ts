@@ -54,10 +54,18 @@ export class Pathfinder {
     if (item instanceof paper.PathItem) return item;
     if (item instanceof paper.Shape) return item.toPath();
     if (item.children) {
+      let combined: paper.PathItem | null = null;
       for (const child of item.children) {
         const found = this.findPath(child);
-        if (found) return found;
+        if (found) {
+          if (!combined) {
+            combined = found;
+          } else {
+            combined = combined.unite(found);
+          }
+        }
       }
+      return combined;
     }
     return null;
   }

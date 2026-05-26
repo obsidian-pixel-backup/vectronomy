@@ -8,7 +8,8 @@
   <!-- SEO Master Tags -->
   <title>Vectronomy — Free Online SVG Creator, XCS Converter & Laser CAD Studio</title>
   <meta name="description" content="Vectronomy is a free, high-performance client-side XCS to SVG converter and vector editing studio. Import XCS project files, customize node anchors, adjust stroke cap/joins, and export clean, production-ready SVGs for laser cutting, CNC, and fabrication." />
-  <meta name="keywords" content="xcs to svg, xcs converter, online svg creator, free vector editor, laser cut vector studio, cnc vector design, xtool xcs to svg, paperjs svg editor, browser cad, bezier pen tool" />
+  <meta name="keywords" content="xcs to svg, xcs converter, online svg creator, free vector editor, laser cut vector studio, cnc vector design, xtool xcs to svg, browser cad, bezier pen tool, laser engraving software" />
+  <meta name="author" content="Vectronomy Studio" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://vectronomy.vercel.app/" />
 
@@ -577,17 +578,17 @@
                 <div class="prop-section" id="prop-section-pathfinder">
                   <div class="prop-section-title">Pathfinder</div>
                   <div class="align-grid" style="grid-template-columns: repeat(4, 1fr); gap: 4px;">
-                    <button class="align-btn" id="path-unite" title="Unite (Union)">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 12h8v8h-8z"/></svg>
+                    <button class="pathfinder-btn" id="path-unite" title="Unite (Union)">
+                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M4 4h10v6h6v10H10v-6H4z"/></svg>
                     </button>
-                    <button class="align-btn" id="path-subtract" title="Subtract (Minus Front)">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 12h8v8h-8z" fill="var(--bg-glass)"/></svg>
+                    <button class="pathfinder-btn" id="path-subtract" title="Subtract (Minus Front)">
+                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M4 4h10v6H10v4H4z"/><rect x="10" y="10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2" opacity="0.4"/></svg>
                     </button>
-                    <button class="align-btn" id="path-intersect" title="Intersect">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 12h4v4h-4z"/></svg>
+                    <button class="pathfinder-btn" id="path-intersect" title="Intersect">
+                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="10" y="10" width="4" height="4"/><rect x="4" y="4" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2" opacity="0.4"/><rect x="10" y="10" width="10" height="10" fill="none" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 2" opacity="0.4"/></svg>
                     </button>
-                    <button class="align-btn" id="path-exclude" title="Exclude">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 8h8v8H8z"/><path d="M12 12h8v8h-8z"/><path d="M12 12h4v4h-4z" fill="var(--bg-glass)"/></svg>
+                    <button class="pathfinder-btn" id="path-exclude" title="Exclude">
+                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M4 4h10v10H4V4zm6 6h10v10H10V10z"/></svg>
                     </button>
                   </div>
                 </div>
@@ -668,23 +669,23 @@
                 <div class="prop-section" style="border-top: 1px solid var(--glass-border); padding-top: 15px;">
                   <div class="prop-section-title">Grid Array (Step & Repeat)</div>
                   <div class="prop-row" style="margin-bottom: 8px;">
-                    <div class="prop-field">
-                      <label for="prop-array-rows" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Rows</label>
-                      <input type="number" id="prop-array-rows" value="2" min="1" step="1" style="width: 100%;" />
+                    <div class="input-field" style="flex: 1;">
+                      <span style="min-width: 32px;">Row</span>
+                      <input type="number" id="prop-array-rows" value="2" min="1" step="1" />
                     </div>
-                    <div class="prop-field">
-                      <label for="prop-array-cols" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Columns</label>
-                      <input type="number" id="prop-array-cols" value="2" min="1" step="1" style="width: 100%;" />
+                    <div class="input-field" style="flex: 1;">
+                      <span style="min-width: 32px;">Col</span>
+                      <input type="number" id="prop-array-cols" value="2" min="1" step="1" />
                     </div>
                   </div>
                   <div class="prop-row" style="margin-bottom: 12px;">
-                    <div class="prop-field">
-                      <label for="prop-array-spacing-x" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Spacing X (px)</label>
-                      <input type="number" id="prop-array-spacing-x" value="50" step="5" style="width: 100%;" />
+                    <div class="input-field" style="flex: 1;">
+                      <span style="min-width: 32px;">Sp X</span>
+                      <input type="number" id="prop-array-spacing-x" value="50" step="5" />
                     </div>
-                    <div class="prop-field">
-                      <label for="prop-array-spacing-y" style="font-size: 0.6rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px;">Spacing Y (px)</label>
-                      <input type="number" id="prop-array-spacing-y" value="50" step="5" style="width: 100%;" />
+                    <div class="input-field" style="flex: 1;">
+                      <span style="min-width: 32px;">Sp Y</span>
+                      <input type="number" id="prop-array-spacing-y" value="50" step="5" />
                     </div>
                   </div>
                   <button id="btn-create-array" class="btn btn-secondary" style="width:100%; font-size: 0.7rem; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 0;">

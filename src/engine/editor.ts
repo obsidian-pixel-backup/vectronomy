@@ -56,7 +56,11 @@ export class VectorEditor {
 
   // Drag state
   private isDragging = false;
-  private dragMode: 'move' | 'resize' | null = null;
+  private dragMode: 'move' | 'resize' | 'rotate' | null = null;
+  private dragPivotX: number = 0;
+  private dragPivotY: number = 0;
+  private accumulatedRotation: number = 0;
+  private lastAppliedRotation: number = 0;
   private activeHandle: string | null = null;
   private dragStartX = 0;
   private dragStartY = 0;
@@ -121,11 +125,11 @@ export class VectorEditor {
         if (this.activeTool === 'pen' && this.isDrawing) {
           e.preventDefault();
           e.stopPropagation();
-          this.finalizePenPath();
+          if (e.key === 'Escape') this.cancelDrawing(); else this.finalizePenPath();
         } else if (this.activeTool === 'polyline' && this.isDrawing) {
           e.preventDefault();
           e.stopPropagation();
-          this.finalizePolyline();
+          if (e.key === 'Escape') this.cancelDrawing(); else this.finalizePolyline();
         } else if (e.key === 'Escape') {
           this.clearSelection();
         }
@@ -338,13 +342,21 @@ export class VectorEditor {
     const handle = target.closest('[data-handle-id]') as SVGElement | null;
 
     if (handle) {
+      const id = handle.getAttribute('data-handle-id')!;
       e.stopPropagation(); e.preventDefault();
       this.isDragging = true;
-      this.dragMode = 'resize';
-      this.activeHandle = handle.getAttribute('data-handle-id');
+      this.dragMode = id.endsWith('-rot') ? 'rotate' : 'resize';
+      this.activeHandle = id;
       this.dragStartX = e.clientX; this.dragStartY = e.clientY;
-      const el = this.getSelectedEl();
-      if (el) this.origBBox = el.getBoundingClientRect();
+      const els = this.getSelectedEls();
+      if (els.length > 0) {
+        const tBox = this.getUnionBBox(els);
+        this.dragPivotX = tBox.x + tBox.width / 2;
+        this.dragPivotY = tBox.y + tBox.height / 2;
+        this.origBBox = els[0].getBoundingClientRect();
+      }
+      this.accumulatedRotation = 0;
+      this.lastAppliedRotation = 0;
       this.onInteractionStart();
       return;
     }
@@ -547,6 +559,8 @@ export class VectorEditor {
       els.forEach((el: SVGGraphicsElement) => this.translateEl(el, dx, dy));
     } else if (this.dragMode === 'resize') {
       this.resizeSelection(dx, dy, this.activeHandle!, e.shiftKey, e.altKey);
+    } else if (this.dragMode === 'rotate') {
+      this.rotateSelection(e, e.shiftKey);
     }
 
     this.dragStartX = e.clientX;
@@ -1200,6 +1214,8 @@ export class VectorEditor {
           this.drawingEl.remove();
           this.selectedIds.add(frame.getAttribute('data-xcs-id')!);
           this.selectedId = frame.getAttribute('data-xcs-id')!;
+          this.renderSelectionUI();
+          this.notifyChange(frame);
         }
       } else {
         this.drawingEl.remove();
@@ -1216,16 +1232,46 @@ export class VectorEditor {
     const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
     if (!viewport) return;
 
-    // Use a flat calligraphic projection to create a thick eraser path.
-    const eraserShapeD = this.getCalligraphicD(this.getPointsFromD(eraserPathD), size);
+    // Calculate eraser bounding box to skip non-intersecting elements
+    let exMin = Infinity, exMax = -Infinity, eyMin = Infinity, eyMax = -Infinity;
+    for (const p of this.eraserPoints) {
+      if (p.x < exMin) exMin = p.x;
+      if (p.x > exMax) exMax = p.x;
+      if (p.y < eyMin) eyMin = p.y;
+      if (p.y > eyMax) eyMax = p.y;
+    }
+    const erPadding = size / 2;
+    exMin -= erPadding; exMax += erPadding;
+    eyMin -= erPadding; eyMax += erPadding;
+
+    // Generate a single compound path containing circles and polygons for a uniform thickness stroke
+    let eraserShapeD = '';
+    const radius = size / 2;
+    for (let i = 0; i < this.eraserPoints.length; i++) {
+      const p = this.eraserPoints[i];
+      eraserShapeD += `M ${p.x - radius} ${p.y} A ${radius} ${radius} 0 1 0 ${p.x + radius} ${p.y} A ${radius} ${radius} 0 1 0 ${p.x - radius} ${p.y} Z `;
+      if (i > 0) {
+        const prev = this.eraserPoints[i - 1];
+        const angle = Math.atan2(p.y - prev.y, p.x - prev.x);
+        const dx = radius * Math.cos(angle + Math.PI / 2);
+        const dy = radius * Math.sin(angle + Math.PI / 2);
+        eraserShapeD += `M ${prev.x + dx} ${prev.y + dy} L ${prev.x - dx} ${prev.y - dy} L ${p.x - dx} ${p.y - dy} L ${p.x + dx} ${p.y + dy} Z `;
+      }
+    }
+    const eraserSvgStr = `<svg xmlns="http://www.w3.org/2000/svg"><path d="${eraserShapeD}" fill="black" fill-rule="nonzero" /></svg>`;
     
     const elements = Array.from(viewport.querySelectorAll('[data-xcs-id]'));
     let modified = false;
 
-    const eraserSvgStr = `<svg xmlns="http://www.w3.org/2000/svg"><path d="${eraserShapeD}" fill="black" /></svg>`;
-
     elements.forEach(el => {
       if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline'].includes(el.tagName.toLowerCase())) {
+        
+        // Skip elements that don't intersect the eraser's bounding box
+        const elBox = this.getTransformedBBox(el as SVGGraphicsElement);
+        if (elBox.x + elBox.width < exMin || elBox.x > exMax || elBox.y + elBox.height < eyMin || elBox.y > eyMax) {
+          return;
+        }
+
         const elSvgStr = `<svg xmlns="http://www.w3.org/2000/svg">${el.outerHTML}</svg>`;
         const result = Pathfinder.performOperation(elSvgStr, eraserSvgStr, 'subtract');
         if (result) {
@@ -1396,6 +1442,46 @@ export class VectorEditor {
     this.clearSelection();
     this.renderSelectionUI();
     this.onInteractionEnd();
+  }
+
+  public canUndoDrawing(): boolean {
+    if (!this.isDrawing) return false;
+    if (this.activeTool === 'pen' && this.penPoints.length > 0) return true;
+    if (this.activeTool === 'polyline' && this.polylinePoints.length > 0) return true;
+    return false;
+  }
+
+  public undoDrawing(): void {
+    if (this.activeTool === 'pen' && this.penPoints.length > 0) {
+      this.penPoints.pop();
+      if (this.penPoints.length === 0) {
+        this.cancelDrawing();
+      } else {
+        const d = this.getPathD(this.penPoints, false, undefined);
+        if (this.drawingEl) this.drawingEl.setAttribute('d', d);
+        this.renderPenOverlay();
+      }
+    } else if (this.activeTool === 'polyline' && this.polylinePoints.length > 0) {
+      this.polylinePoints.pop();
+      if (this.polylinePoints.length === 0) {
+        this.cancelDrawing();
+      } else {
+        const d = `M ${this.polylinePoints[0].x} ${this.polylinePoints[0].y} ` + 
+                  this.polylinePoints.slice(1).map(p => `L ${p.x} ${p.y}`).join(' ');
+        if (this.drawingEl) this.drawingEl.setAttribute('d', d);
+      }
+    }
+  }
+
+  public cancelDrawing(): void {
+    if (this.drawingEl) {
+      this.drawingEl.remove();
+      this.drawingEl = null;
+    }
+    this.isDrawing = false;
+    this.penPoints = [];
+    this.polylinePoints = [];
+    this.renderPenOverlay();
   }
 
   private finalizePenPath() {
@@ -1708,6 +1794,27 @@ export class VectorEditor {
 
     // Handles
     const hs = 5 * invScale;
+    const rs = 13 * invScale; // Rotate hit area size
+
+    // Invisible rotate handles placed behind resize handles
+    const rotHandles = [
+      { id: 'tl-rot', x: tBox.x, y: tBox.y },
+      { id: 'tr-rot', x: tBox.x + tBox.width, y: tBox.y },
+      { id: 'bl-rot', x: tBox.x, y: tBox.y + tBox.height },
+      { id: 'br-rot', x: tBox.x + tBox.width, y: tBox.y + tBox.height },
+    ];
+    for (const h of rotHandles) {
+      const c = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      c.setAttribute('x', `${h.x - rs}`);
+      c.setAttribute('y', `${h.y - rs}`);
+      c.setAttribute('width', `${rs * 2}`);
+      c.setAttribute('height', `${rs * 2}`);
+      c.setAttribute('fill', 'transparent');
+      c.setAttribute('data-handle-id', h.id);
+      c.style.pointerEvents = 'all';
+      c.style.cursor = "url('data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\" viewBox=\"0 0 24 24\"><path fill=\"none\" stroke=\"%23fff\" stroke-width=\"4\" stroke-linecap=\"round\" d=\"M12 21a9 9 0 1 0-9-9\"/><path fill=\"%23fff\" d=\"M3 12v6h6\"/><path fill=\"none\" stroke=\"%23000\" stroke-width=\"1.5\" stroke-linecap=\"round\" d=\"M12 21a9 9 0 1 0-9-9\"/><path fill=\"%23000\" d=\"M3 12v6h6\"/></svg>') 10 10, crosshair";
+      g.appendChild(c);
+    }
     const handles = [
       { id: 'tl', x: tBox.x, y: tBox.y },
       { id: 'tc', x: tBox.x + tBox.width / 2, y: tBox.y },
@@ -1990,6 +2097,57 @@ export class VectorEditor {
         transformList.appendItem(matrixTransform);
       }
       matrixTransform.setMatrix(sMat.multiply(matrixTransform.matrix));
+    });
+  }
+
+  private rotateSelection(e: MouseEvent | TouchEvent, shiftKey: boolean) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    let clientX = 0, clientY = 0;
+    if ('clientX' in e) { clientX = e.clientX; clientY = e.clientY; }
+    else { clientX = (e as TouchEvent).touches[0].clientX; clientY = (e as TouchEvent).touches[0].clientY; }
+    
+    const pt1 = this.getSvgPoint({ clientX: this.dragStartX, clientY: this.dragStartY } as any);
+    const pt2 = this.getSvgPoint({ clientX, clientY } as any);
+    if (!pt1 || !pt2) return;
+    
+    const angle1 = Math.atan2(pt1.y - this.dragPivotY, pt1.x - this.dragPivotX);
+    const angle2 = Math.atan2(pt2.y - this.dragPivotY, pt2.x - this.dragPivotX);
+    
+    let diffAngle = (angle2 - angle1) * 180 / Math.PI;
+    
+    // Normalize diffAngle to avoid jumping around the -180/180 boundary
+    if (diffAngle > 180) diffAngle -= 360;
+    if (diffAngle < -180) diffAngle += 360;
+    
+    this.accumulatedRotation += diffAngle;
+    
+    let targetRotation = this.accumulatedRotation;
+    if (shiftKey) {
+      targetRotation = Math.round(this.accumulatedRotation / 15) * 15;
+    }
+    
+    const applyDiff = targetRotation - this.lastAppliedRotation;
+    if (applyDiff === 0) return;
+    
+    this.lastAppliedRotation = targetRotation;
+    
+    const mainSvg = this.container.querySelector('svg')!;
+    const rMat = mainSvg.createSVGMatrix()
+      .translate(this.dragPivotX, this.dragPivotY)
+      .rotate(applyDiff)
+      .translate(-this.dragPivotX, -this.dragPivotY);
+
+    els.forEach((el: SVGGraphicsElement) => {
+      const transformList = el.transform.baseVal;
+      let matrixTransform = transformList.consolidate();
+      if (!matrixTransform) {
+        matrixTransform = mainSvg.createSVGTransform();
+        matrixTransform.setMatrix(mainSvg.createSVGMatrix());
+        transformList.appendItem(matrixTransform);
+      }
+      matrixTransform.setMatrix(rMat.multiply(matrixTransform.matrix));
     });
   }
 
