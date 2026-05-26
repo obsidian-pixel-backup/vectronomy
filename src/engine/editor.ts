@@ -94,6 +94,7 @@ export class VectorEditor {
   private magicWandThreshold: number = 20;
   private brushPoints: { x: number; y: number }[] = [];
   private eraserPoints: { x: number; y: number }[] = [];
+  private brushCursor: SVGCircleElement | null = null;
   
   private snapFn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null = null;
   public setSnapFunction(fn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null) {
@@ -116,26 +117,98 @@ export class VectorEditor {
     this.init();
   }
 
+  public shiftPressed: boolean = false;
+  public altPressed: boolean = false;
+
+  private boundOnMouseMove = this.onMouseMove.bind(this);
+  private boundOnMouseUp = this.onMouseUp.bind(this);
+  private boundOnKeyDown = this.onKeyDown.bind(this);
+  private boundOnKeyUp = this.onKeyUp.bind(this);
+  private boundOnMouseDown = this.onMouseDown.bind(this);
+  private boundOnDblClick = this.onDblClick.bind(this);
+  private boundOnMouseLeave = this.onMouseLeave.bind(this);
+
   private init() {
-    this.container.addEventListener('mousedown', this.onMouseDown.bind(this));
-    window.addEventListener('mousemove', this.onMouseMove.bind(this));
-    window.addEventListener('mouseup', this.onMouseUp.bind(this));
-    this.container.addEventListener('dblclick', this.onDblClick.bind(this));
-    window.addEventListener('keydown', (e) => { 
-      if (e.key === 'Escape' || e.key === 'Enter') {
-        if (this.activeTool === 'pen' && this.isDrawing) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.key === 'Escape') this.cancelDrawing(); else this.finalizePenPath();
-        } else if (this.activeTool === 'polyline' && this.isDrawing) {
-          e.preventDefault();
-          e.stopPropagation();
-          if (e.key === 'Escape') this.cancelDrawing(); else this.finalizePolyline();
-        } else if (e.key === 'Escape') {
-          this.clearSelection();
-        }
+    this.container.addEventListener('mousedown', this.boundOnMouseDown);
+    this.container.addEventListener('mouseleave', this.boundOnMouseLeave);
+    window.addEventListener('mousemove', this.boundOnMouseMove);
+    window.addEventListener('mouseup', this.boundOnMouseUp);
+    this.container.addEventListener('dblclick', this.boundOnDblClick);
+    window.addEventListener('keydown', this.boundOnKeyDown);
+    window.addEventListener('keyup', this.boundOnKeyUp);
+  }
+
+  public destroy() {
+    this.container.removeEventListener('mousedown', this.boundOnMouseDown);
+    this.container.removeEventListener('mouseleave', this.boundOnMouseLeave);
+    window.removeEventListener('mousemove', this.boundOnMouseMove);
+    window.removeEventListener('mouseup', this.boundOnMouseUp);
+    this.container.removeEventListener('dblclick', this.boundOnDblClick);
+    window.removeEventListener('keydown', this.boundOnKeyDown);
+    window.removeEventListener('keyup', this.boundOnKeyUp);
+  }
+
+  private onMouseLeave() {
+    this.updateBrushCursor(null);
+  }
+
+  private updateBrushCursor(pt?: DOMPoint | null) {
+    const mainSvg = this.container.querySelector('svg');
+    if (!mainSvg) return;
+
+    if (this.activeTool !== 'eraser' && this.activeTool !== 'brush') {
+      if (this.brushCursor) {
+        this.brushCursor.remove();
+        this.brushCursor = null;
       }
-    });
+      return;
+    }
+
+    if (!this.brushCursor) {
+      this.brushCursor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      this.brushCursor.setAttribute('fill', 'none');
+      this.brushCursor.setAttribute('stroke', this.activeTool === 'eraser' ? 'rgba(255,0,0,0.5)' : '#00ffc2');
+      this.brushCursor.setAttribute('stroke-width', '1');
+      this.brushCursor.style.pointerEvents = 'none';
+    }
+    
+    const viewport = mainSvg.querySelector('#viewport') || mainSvg;
+    if (this.brushCursor.parentElement !== viewport) {
+      viewport.appendChild(this.brushCursor);
+    }
+
+    if (pt) {
+      this.brushCursor.setAttribute('cx', pt.x.toString());
+      this.brushCursor.setAttribute('cy', pt.y.toString());
+      this.brushCursor.setAttribute('r', (this.brushSize / 2).toString());
+      this.brushCursor.setAttribute('stroke', this.activeTool === 'eraser' ? 'rgba(255,0,0,0.5)' : '#00ffc2');
+      this.brushCursor.style.display = '';
+    } else {
+      this.brushCursor.style.display = 'none';
+    }
+  }
+
+  private onKeyDown(e: KeyboardEvent) {
+    if (e.key === 'Shift') this.shiftPressed = true;
+    if (e.key === 'Alt') this.altPressed = true;
+    if (e.key === 'Escape' || e.key === 'Enter') {
+      if (this.activeTool === 'pen' && this.isDrawing) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === 'Escape') this.cancelDrawing(); else this.finalizePenPath();
+      } else if (this.activeTool === 'polyline' && this.isDrawing) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === 'Escape') this.cancelDrawing(); else this.finalizePolyline();
+      } else if (e.key === 'Escape') {
+        this.clearSelection();
+      }
+    }
+  }
+
+  private onKeyUp(e: KeyboardEvent) {
+    if (e.key === 'Shift') this.shiftPressed = false;
+    if (e.key === 'Alt') this.altPressed = false;
   }
 
   setLayer(layer: ConvertedLayer) { this.currentLayer = layer; this.clearSelection(); }
@@ -154,6 +227,8 @@ export class VectorEditor {
     this.onDrawingChange?.();
     if (tool !== 'select' && tool !== 'pan') this.onInteractionStart();
     else this.onInteractionEnd();
+
+    this.updateBrushCursor(null);
 
     const container = this.container;
     if (tool === 'pan') {
@@ -363,8 +438,8 @@ export class VectorEditor {
       return;
     }
 
-    // Prioritize grouped elements (clusters) over individual paths
-    const selectable = target.closest('g[data-xcs-id]') || target.closest('[data-xcs-id]') as SVGElement | null;
+    // Prioritize grouped elements (clusters) over individual paths, but ignore frames so we can deep-select
+    const selectable = target.closest('g[data-xcs-id]:not(.vectronomy-frame)') || target.closest('[data-xcs-id]') as SVGElement | null;
     if (selectable) {
       const id = selectable.getAttribute('data-xcs-id')!;
       e.stopPropagation(); e.preventDefault();
@@ -389,18 +464,14 @@ export class VectorEditor {
       this.notifyChange(this.getSelectedEls()[0] || null);
       this.onInteractionStart();
     } else {
-      // Start Marquee Selection - Restricted to Shift Key held down
-      if (e.shiftKey) {
-        this.selectedId = null;
-        this.renderSelectionUI();
-        this.notifyChange(null as any);
-        
-        this.isMarquee = true;
-        this.marqueeStart = this.getSvgPoint(e);
-        this.onInteractionStart();
-      } else {
+      // Start Marquee Selection
+      if (!e.shiftKey) {
         this.clearSelection();
       }
+      
+      this.isMarquee = true;
+      this.marqueeStart = this.getSvgPoint(e);
+      this.onInteractionStart();
     }
   }
 
@@ -474,12 +545,15 @@ export class VectorEditor {
     return path;
   }
 
+  private eraserModified: boolean = false;
+
   private onMouseMove(e: MouseEvent) {
-    if (this.isDrawing && this.drawingEl) { this.updateDraw(e); return; }
-    
-    if (this.isDrawing && (this.activeTool === 'brush' || this.activeTool === 'eraser')) {
-      // Handled by updateDraw
+    const pt = this.getSvgPoint(e);
+    if (this.activeTool === 'eraser' || this.activeTool === 'brush') {
+      this.updateBrushCursor(pt);
     }
+
+    if (this.isDrawing && (this.drawingEl || this.activeTool === 'eraser')) { this.updateDraw(e); return; }
     
     if (this.isMarquee && this.marqueeStart) {
       const pt = this.getSvgPoint(e);
@@ -970,9 +1044,10 @@ export class VectorEditor {
         this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
         break;
       case 'eraser':
-        this.drawingEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         this.eraserPoints = [{ x: pt.x, y: pt.y }];
-        this.drawingEl.setAttribute('d', `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`);
+        this.eraserModified = false;
+        this.performVectorEraser(this.eraserPoints, this.brushSize);
+        // Do not create drawingEl for eraser
         break;
     }
 
@@ -1148,8 +1223,10 @@ export class VectorEditor {
         break;
       }
       case 'eraser': {
-        this.eraserPoints.push({ x: pt.x, y: pt.y });
-        this.drawingEl.setAttribute('d', this.getSmoothedPencilD(this.eraserPoints));
+        const lastPt = this.eraserPoints[this.eraserPoints.length - 1];
+        const currentPt = { x: pt.x, y: pt.y };
+        this.eraserPoints.push(currentPt);
+        this.performVectorEraser([lastPt, currentPt], this.brushSize);
         break;
       }
     }
@@ -1177,14 +1254,13 @@ export class VectorEditor {
       this.brushPoints = [];
     }
     
-    if (this.activeTool === 'eraser' && this.drawingEl && this.eraserPoints.length > 1) {
-      const eraserD = this.getSmoothedPencilD(this.eraserPoints);
-      const size = this.brushSize;
-      this.eraserPoints = [];
-      this.drawingEl.remove();
-      this.drawingEl = null;
+    if (this.activeTool === 'eraser') {
       this.isDrawing = false;
-      this.performVectorEraser(eraserD, size);
+      this.eraserPoints = [];
+      if (this.eraserModified) {
+        this.commit();
+      }
+      this.onDrawingChange?.();
       return;
     }
 
@@ -1234,14 +1310,14 @@ export class VectorEditor {
     this.onDrawingChange?.();
   }
 
-  private performVectorEraser(eraserPathD: string, size: number) {
+  private performVectorEraser(points: {x: number, y: number}[], size: number) {
     const mainSvg = this.container.querySelector('svg');
     const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
     if (!viewport) return;
 
     // Calculate eraser bounding box to skip non-intersecting elements
     let exMin = Infinity, exMax = -Infinity, eyMin = Infinity, eyMax = -Infinity;
-    for (const p of this.eraserPoints) {
+    for (const p of points) {
       if (p.x < exMin) exMin = p.x;
       if (p.x > exMax) exMax = p.x;
       if (p.y < eyMin) eyMin = p.y;
@@ -1251,27 +1327,29 @@ export class VectorEditor {
     exMin -= erPadding; exMax += erPadding;
     eyMin -= erPadding; eyMax += erPadding;
 
-    // Generate a single compound path containing circles and polygons for a uniform thickness stroke
-    let eraserShapeD = '';
+    // Generate individual paths for circles and rectangles so Paper.js can properly unite them
+    let eraserShapes = '';
     const radius = size / 2;
-    for (let i = 0; i < this.eraserPoints.length; i++) {
-      const p = this.eraserPoints[i];
-      eraserShapeD += `M ${p.x - radius} ${p.y} A ${radius} ${radius} 0 1 0 ${p.x + radius} ${p.y} A ${radius} ${radius} 0 1 0 ${p.x - radius} ${p.y} Z `;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      // Circle at each point
+      const circleD = `M ${p.x - radius} ${p.y} A ${radius} ${radius} 0 1 0 ${p.x + radius} ${p.y} A ${radius} ${radius} 0 1 0 ${p.x - radius} ${p.y} Z`;
+      eraserShapes += `<path d="${circleD}" fill="black" fill-rule="nonzero" />`;
+      
       if (i > 0) {
-        const prev = this.eraserPoints[i - 1];
+        const prev = points[i - 1];
         const angle = Math.atan2(p.y - prev.y, p.x - prev.x);
         const dx = radius * Math.cos(angle + Math.PI / 2);
         const dy = radius * Math.sin(angle + Math.PI / 2);
-        eraserShapeD += `M ${prev.x + dx} ${prev.y + dy} L ${prev.x - dx} ${prev.y - dy} L ${p.x - dx} ${p.y - dy} L ${p.x + dx} ${p.y + dy} Z `;
+        const rectD = `M ${prev.x + dx} ${prev.y + dy} L ${prev.x - dx} ${prev.y - dy} L ${p.x - dx} ${p.y - dy} L ${p.x + dx} ${p.y + dy} Z`;
+        eraserShapes += `<path d="${rectD}" fill="black" fill-rule="nonzero" />`;
       }
     }
-    const eraserShapes = `<path d="${eraserShapeD}" fill="black" fill-rule="nonzero" />`;
     
     const elements = Array.from(viewport.querySelectorAll('[data-xcs-id]'));
-    let modified = false;
 
     elements.forEach(el => {
-      if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline'].includes(el.tagName.toLowerCase())) {
+      if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line'].includes(el.tagName.toLowerCase())) {
         
         // Skip elements that don't intersect the eraser's bounding box
         const elBox = this.getBBoxInViewport(el as SVGGraphicsElement, viewport as SVGGElement);
@@ -1297,7 +1375,7 @@ export class VectorEditor {
         if (result) {
           const parser = new DOMParser();
           const doc = parser.parseFromString(result, 'image/svg+xml');
-          const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline')) as SVGElement[];
+          const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
           if (newPaths.length > 0) {
             const originalId = el.getAttribute('data-xcs-id');
             const originalStroke = el.getAttribute('stroke');
@@ -1315,23 +1393,23 @@ export class VectorEditor {
                             np.setAttribute(attr.name, attr.value);
                         }
                     });
-                    
+                    if (originalStroke) np.setAttribute('stroke', originalStroke);
+                    if (originalFill) np.setAttribute('fill', originalFill);
+                    if (originalStrokeWidth) np.setAttribute('stroke-width', originalStrokeWidth);
                     if (i === 0 && originalId) np.setAttribute('data-xcs-id', originalId);
                     else np.setAttribute('data-xcs-id', `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
                     fragment.appendChild(np);
                 });
                 el.replaceWith(fragment);
             }
-            modified = true;
+            this.eraserModified = true;
           } else {
             el.remove();
-            modified = true;
+            this.eraserModified = true;
           }
         }
       }
     });
-
-    if (modified) this.commit();
   }
 
   private getPointsFromD(d: string): {x: number, y: number}[] {
@@ -2098,6 +2176,23 @@ export class VectorEditor {
   }
 
   private translateEl(el: SVGGraphicsElement, dx: number, dy: number) {
+    let localDx = dx;
+    let localDy = dy;
+    const parent = el.parentElement as unknown as SVGGraphicsElement;
+    if (parent && parent.tagName.toLowerCase() !== 'svg' && parent.id !== 'viewport') {
+      const mainSvg = el.ownerSVGElement;
+      const viewport = mainSvg?.querySelector('#viewport') as SVGGraphicsElement || mainSvg;
+      if (mainSvg && viewport) {
+        const vpCTM = viewport.getCTM();
+        const parentCTM = parent.getCTM();
+        if (vpCTM && parentCTM) {
+          const vpToParent = parentCTM.inverse().multiply(vpCTM);
+          localDx = vpToParent.a * dx + vpToParent.c * dy;
+          localDy = vpToParent.b * dx + vpToParent.d * dy;
+        }
+      }
+    }
+
     const transformList = el.transform.baseVal;
     let matrixTransform = transformList.consolidate();
     if (!matrixTransform) {
@@ -2108,8 +2203,8 @@ export class VectorEditor {
       transformList.appendItem(matrixTransform);
     }
     const m = matrixTransform.matrix;
-    m.e += dx;
-    m.f += dy;
+    m.e += localDx;
+    m.f += localDy;
     matrixTransform.setMatrix(m);
   }
 

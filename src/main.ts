@@ -23,6 +23,9 @@ import { UIManager } from './managers/UIManager';
 import { StorageManager } from './managers/StorageManager';
 import { ProjectManager } from './managers/ProjectManager';
 import { GridManager } from './managers/GridManager';
+import { ToolbarManager } from './managers/ToolbarManager';
+
+const toolbarManager = new ToolbarManager();
 
 // ── DOM ─────────────────────────────────────────────────────────
 
@@ -289,6 +292,66 @@ async function processSvgFile(file: File) {
     const svgEl = doc.querySelector('svg');
     if (!svgEl) throw new Error('Invalid SVG format.');
 
+    // Find viewBox to understand original bounds
+    const viewBox = svgEl.getAttribute('viewBox');
+    let origWidth = parseFloat(svgEl.getAttribute('width') || '0');
+    let origHeight = parseFloat(svgEl.getAttribute('height') || '0');
+    
+    if (viewBox) {
+      const parts = viewBox.split(/[ ,]+/);
+      if (parts.length === 4) {
+        if (!origWidth) origWidth = parseFloat(parts[2]);
+        if (!origHeight) origHeight = parseFloat(parts[3]);
+      }
+    }
+
+    // Force the SVG to fill the editor wrapper and let Panzoom handle the scaling/viewBox
+    svgEl.setAttribute('width', '100%');
+    svgEl.setAttribute('height', '100%');
+    svgEl.removeAttribute('viewBox');
+    svgEl.removeAttribute('x');
+    svgEl.removeAttribute('y');
+    svgEl.removeAttribute('style');
+
+    // Remove Figma/Illustrator artboard clip paths (clipPaths containing exactly one rect that matches canvas size)
+    const clipPaths = Array.from(doc.querySelectorAll('clipPath'));
+    const artboardClips = new Set<string>();
+    clipPaths.forEach(clip => {
+      const rect = clip.querySelector('rect');
+      if (rect && clip.children.length === 1) {
+        artboardClips.add(clip.id);
+        clip.remove();
+      }
+    });
+
+    if (artboardClips.size > 0) {
+      const elementsWithClip = Array.from(doc.querySelectorAll('[clip-path]'));
+      elementsWithClip.forEach(el => {
+        const clipAttr = el.getAttribute('clip-path');
+        if (clipAttr) {
+          for (const id of artboardClips) {
+            if (clipAttr.includes(`#${id}`)) {
+              el.removeAttribute('clip-path');
+            }
+          }
+        }
+      });
+    }
+
+    // Remove white/solid background rects that exactly match the artboard size (Figma exports these)
+    if (origWidth > 0 && origHeight > 0) {
+      const rects = Array.from(doc.querySelectorAll('rect'));
+      for (const rect of rects) {
+        const w = parseFloat(rect.getAttribute('width') || '0');
+        const h = parseFloat(rect.getAttribute('height') || '0');
+        // If it's effectively the exact size of the document, assume it's a background artboard
+        if (Math.abs(w - origWidth) < 2 && Math.abs(h - origHeight) < 2) {
+          rect.remove();
+          // Usually only one background rect, but we can safely remove any that are exactly document size
+        }
+      }
+    }
+
     // Establish Viewport Layer if missing
     let viewport = svgEl.querySelector('#viewport') as SVGElement | null;
     if (!viewport) {
@@ -303,7 +366,7 @@ async function processSvgFile(file: File) {
     }
 
     // Inject data-xcs-ids to all standard shapes that lack them
-    const targetSelectors = 'path, rect, ellipse, circle, line, polyline, polygon, text, g';
+    const targetSelectors = 'path, rect, ellipse, circle, line, polyline, polygon, text, use, image';
     const shapes = viewport.querySelectorAll(targetSelectors);
     shapes.forEach((shape, index) => {
       if (!shape.hasAttribute('data-xcs-id')) {
@@ -498,7 +561,6 @@ async function processSvgImport(file: File, dropCoords: DOMPoint) {
 function openBlankCanvas() {
   const blankSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
   <g id="viewport">
-    <rect width="1" height="1" fill="none" pointer-events="none" />
   </g>
 </svg>`;
   convertedLayers = [{
@@ -621,83 +683,8 @@ function initEditor() {
 
   editor.setSnapFunction((pt) => gridManager.snapPoint(pt));
 
-  // ── Tool buttons ────────────────────────────────────────────
-  const toolBtns = document.querySelectorAll<HTMLButtonElement>('.tool-btn[id^="tool-"]');
-  toolBtns.forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      if (btn.id === 'tool-curves-toggle') {
-        e.stopPropagation();
-        const curvesPopover = document.getElementById('curves-popover');
-        const shapesPopover = document.getElementById('shapes-popover');
-        shapesPopover?.classList.remove('show');
-        curvesPopover?.classList.toggle('show');
-        return;
-      }
-      if (btn.id === 'tool-shapes-toggle') {
-        e.stopPropagation();
-        const curvesPopover = document.getElementById('curves-popover');
-        const shapesPopover = document.getElementById('shapes-popover');
-        curvesPopover?.classList.remove('show');
-        shapesPopover?.classList.toggle('show');
-        return;
-      }
-      
-      toolBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      const tool = btn.id.replace('tool-', '') as any;
-      editor!.setTool(tool);
-      updateToolOptionsUI(tool);
-    });
-  });
-
-  // ── Shapes & Curves Dropdown Item Clicks ──────────────────────────────
-  const curvesPopover = document.getElementById('curves-popover');
-  const shapesPopover = document.getElementById('shapes-popover');
-  const curvesToggle = document.getElementById('tool-curves-toggle');
-  const shapesToggle = document.getElementById('tool-shapes-toggle');
-  
-  const shapeItems = document.querySelectorAll<HTMLButtonElement>('.shape-menu-item');
-  shapeItems.forEach(item => {
-    item.addEventListener('click', (e) => {
-      e.stopPropagation();
-      
-      const popover = item.closest('.shapes-popover-menu');
-      let targetToggle: HTMLElement | null = null;
-      if (popover) {
-        if (popover.id === 'curves-popover') {
-          targetToggle = curvesToggle;
-        } else if (popover.id === 'shapes-popover') {
-          targetToggle = shapesToggle;
-        }
-      }
-
-      shapeItems.forEach(i => {
-        if (i.closest('.shapes-popover-menu') === popover) {
-          i.classList.remove('active');
-        }
-      });
-      item.classList.add('active');
-
-      toolBtns.forEach(b => b.classList.remove('active'));
-      if (targetToggle) {
-        targetToggle.classList.add('active');
-        const itemSvg = item.querySelector('svg')!.cloneNode(true);
-        targetToggle.innerHTML = '';
-        targetToggle.appendChild(itemSvg);
-      }
-
-      const tool = item.getAttribute('data-tool')!;
-      editor!.setTool(tool as any);
-      updateToolOptionsUI(tool);
-
-      popover?.classList.remove('show');
-    });
-  });
-
-  document.addEventListener('click', () => {
-    curvesPopover?.classList.remove('show');
-    shapesPopover?.classList.remove('show');
-  });
+  // Initialize Toolbar Manager
+  toolbarManager.init(editor, updateToolOptionsUI);
 
   // ── Array Grid Generator Button Click ─────────────────────────
   const btnCreateArray = document.getElementById('btn-create-array');
@@ -862,7 +849,7 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
   if (!svgEl || !viewport) return;
 
   panzoom = Panzoom(svgEl, {
-    maxScale: 200, minScale: 0.02, step: 0.12,
+    maxScale: 10000, minScale: 0.0001, step: 0.12,
     startScale, startX, startY,
     disablePan: currentDisablePan,
     setTransform: (elem, { scale, x, y }) => {
@@ -873,9 +860,19 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
     },
     handleStartEvent: (e: any) => {
       const t = e.target as SVGElement;
+      // Don't interfere with selection/transform handles
       if (t.closest('[data-handle-id]')) return;
-      if (editor?.activeTool === 'pan') { e.preventDefault(); return; }
-      if (editor?.activeTool === 'select' && !t.closest('[data-xcs-id]')) { e.preventDefault(); return; }
+      // For pan tool: fully hand off to Panzoom
+      if (editor?.activeTool === 'pan') {
+        e.preventDefault();
+        return;
+      }
+      // For all other tools: do NOT call preventDefault().
+      // Panzoom uses pointerdown; calling preventDefault() here
+      // would suppress the subsequent mousedown event that the
+      // VectorEditor listens on.  The editor's onInteractionStart
+      // callback already sets disablePan = true, so Panzoom won't
+      // actually pan even though its internal isPanning flag is set.
     },
   });
 
@@ -897,9 +894,9 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
     const zoomFactor = 1.15;
     let newScale = oldScale;
     if (e.deltaY < 0) {
-      newScale = Math.min(200, oldScale * zoomFactor);
+      newScale = Math.min(10000, oldScale * zoomFactor);
     } else {
-      newScale = Math.max(0.02, oldScale / zoomFactor);
+      newScale = Math.max(0.0001, oldScale / zoomFactor);
     }
 
     if (newScale === oldScale) return;
@@ -973,8 +970,11 @@ function fitSvgToView(svgEl: SVGSVGElement) {
 
   panzoom.zoom(scale, { animate: false });
   
-  let panX = (cW - svgW * scale) / 2 - svgX * scale;
-  let panY = (cH - svgH * scale) / 2 - svgY * scale;
+  let visualPanX = (cW - svgW * scale) / 2 - svgX * scale;
+  let visualPanY = (cH - svgH * scale) / 2 - svgY * scale;
+  
+  let panX = visualPanX / scale;
+  let panY = visualPanY / scale;
   
   if (isNaN(panX)) panX = 0;
   if (isNaN(panY)) panY = 0;
@@ -1283,7 +1283,13 @@ if (importToggle && importDropdown) {
     });
   });
 
-  document.addEventListener('click', () => {
+  document.addEventListener('click', (e) => {
+    const target = e.target as Element;
+
+
+    // Hide dropdowns
+    document.getElementById('curves-popover')?.classList.remove('show');
+    document.getElementById('shapes-popover')?.classList.remove('show');
     importDropdown.classList.remove('show');
     const chevron = importToggle.querySelector('.chevron-icon') as HTMLElement | null;
     if (chevron) chevron.style.transform = 'rotate(0deg)';
@@ -1301,7 +1307,11 @@ document.getElementById('btn-reset')!.addEventListener('click', () => {
   fileInputXcs.value = ''; fileInputSvg.value = '';
   previewContainer.innerHTML = '';
   statsEl.innerHTML = ''; layerTabs.innerHTML = '';
-  editor = null;
+  if (editor) {
+    editor.destroy();
+    editor = null;
+    toolbarManager.destroy();
+  }
   propsEmpty.hidden = false; propsSelection.hidden = true;
 });
 
