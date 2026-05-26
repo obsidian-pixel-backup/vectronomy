@@ -498,6 +498,7 @@ async function processSvgImport(file: File, dropCoords: DOMPoint) {
 function openBlankCanvas() {
   const blankSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
   <g id="viewport">
+    <rect width="1" height="1" fill="none" pointer-events="none" />
   </g>
 </svg>`;
   convertedLayers = [{

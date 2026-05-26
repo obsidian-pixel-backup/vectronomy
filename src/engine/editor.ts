@@ -1688,7 +1688,11 @@ export class VectorEditor {
       pt.x = (e as TouchEvent).touches[0].clientX;
       pt.y = (e as TouchEvent).touches[0].clientY;
     }
-    const transformed = pt.matrixTransform((viewport as SVGGraphicsElement).getScreenCTM()!.inverse());
+    let ctm = (viewport as SVGGraphicsElement).getScreenCTM();
+    if (!ctm) ctm = mainSvg.getScreenCTM();
+    if (!ctm) return pt; // Last resort fallback
+    
+    const transformed = pt.matrixTransform(ctm.inverse());
     if (this.snapFn) {
       const snapped = this.snapFn({ x: transformed.x, y: transformed.y });
       transformed.x = snapped.x;
@@ -2019,7 +2023,18 @@ export class VectorEditor {
   // ── Transform Helpers ─────────────────────────────────────────
 
   private getTransformedBBox(el: SVGGraphicsElement) {
-    const bbox = el.getBBox();
+    let bbox = el.getBBox();
+    if (el.classList.contains('vectronomy-frame')) {
+      const bgRect = el.querySelector('.frame-background');
+      if (bgRect) {
+        bbox = {
+          x: parseFloat(bgRect.getAttribute('x') || '0'),
+          y: parseFloat(bgRect.getAttribute('y') || '0'),
+          width: parseFloat(bgRect.getAttribute('width') || '0'),
+          height: parseFloat(bgRect.getAttribute('height') || '0')
+        } as DOMRect;
+      }
+    }
     const matrix = el.transform.baseVal.consolidate()?.matrix;
     if (!matrix) return bbox;
 
@@ -2044,7 +2059,18 @@ export class VectorEditor {
   }
 
   private getBBoxInViewport(el: SVGGraphicsElement, viewport: SVGGElement) {
-    const bbox = el.getBBox();
+    let bbox = el.getBBox();
+    if (el.classList.contains('vectronomy-frame')) {
+      const bgRect = el.querySelector('.frame-background');
+      if (bgRect) {
+        bbox = {
+          x: parseFloat(bgRect.getAttribute('x') || '0'),
+          y: parseFloat(bgRect.getAttribute('y') || '0'),
+          width: parseFloat(bgRect.getAttribute('width') || '0'),
+          height: parseFloat(bgRect.getAttribute('height') || '0')
+        } as DOMRect;
+      }
+    }
     const ctmEl = el.getCTM();
     const ctmViewport = viewport.getCTM();
     if (!ctmEl || !ctmViewport) return bbox;
@@ -2143,6 +2169,45 @@ export class VectorEditor {
       .translate(-pivotX, -pivotY);
 
     els.forEach((el: SVGGraphicsElement) => {
+      if (el.classList.contains('vectronomy-frame')) {
+        const bgRect = el.querySelector('.frame-background') as SVGRectElement;
+        const clipRect = el.querySelector('clipPath rect') as SVGRectElement;
+        if (bgRect && clipRect) {
+          let rx = parseFloat(bgRect.getAttribute('x') || '0');
+          let ry = parseFloat(bgRect.getAttribute('y') || '0');
+          let rw = parseFloat(bgRect.getAttribute('width') || '0');
+          let rh = parseFloat(bgRect.getAttribute('height') || '0');
+          
+          const pathCTM = el.getCTM();
+          const vpCTM = (mainSvg.querySelector('#viewport') as SVGGraphicsElement || mainSvg).getCTM();
+          let localPivotX = pivotX;
+          let localPivotY = pivotY;
+          if (pathCTM && vpCTM) {
+            const vpToPath = pathCTM.inverse().multiply(vpCTM);
+            localPivotX = vpToPath.a * pivotX + vpToPath.c * pivotY + vpToPath.e;
+            localPivotY = vpToPath.b * pivotX + vpToPath.d * pivotY + vpToPath.f;
+          }
+          
+          let nx = localPivotX + (rx - localPivotX) * sx;
+          let ny = localPivotY + (ry - localPivotY) * sy;
+          let nw = rw * sx;
+          let nh = rh * sy;
+          
+          if (nw < 1) { nx -= (1 - nw); nw = 1; }
+          if (nh < 1) { ny -= (1 - nh); nh = 1; }
+          
+          const updateRect = (r: SVGRectElement) => {
+            r.setAttribute('x', `${nx}`);
+            r.setAttribute('y', `${ny}`);
+            r.setAttribute('width', `${nw}`);
+            r.setAttribute('height', `${nh}`);
+          };
+          updateRect(bgRect);
+          updateRect(clipRect);
+          return;
+        }
+      }
+
       const transformList = el.transform.baseVal;
       let matrixTransform = transformList.consolidate();
       if (!matrixTransform) {
@@ -2410,6 +2475,40 @@ export class VectorEditor {
         .translate(-uBox.x, -uBox.y);
 
       els.forEach((el: SVGGraphicsElement) => {
+        if (el.classList.contains('vectronomy-frame')) {
+          const bgRect = el.querySelector('.frame-background') as SVGRectElement;
+          const clipRect = el.querySelector('clipPath rect') as SVGRectElement;
+          if (bgRect && clipRect) {
+            let rx = parseFloat(bgRect.getAttribute('x') || '0');
+            let ry = parseFloat(bgRect.getAttribute('y') || '0');
+            let rw = parseFloat(bgRect.getAttribute('width') || '0');
+            let rh = parseFloat(bgRect.getAttribute('height') || '0');
+            
+            const pathCTM = el.getCTM();
+            const vpCTM = (mainSvg.querySelector('#viewport') as SVGGraphicsElement || mainSvg).getCTM();
+            let localPivotX = uBox.x;
+            let localPivotY = uBox.y;
+            if (pathCTM && vpCTM) {
+              const vpToPath = pathCTM.inverse().multiply(vpCTM);
+              localPivotX = vpToPath.a * uBox.x + vpToPath.c * uBox.y + vpToPath.e;
+              localPivotY = vpToPath.b * uBox.x + vpToPath.d * uBox.y + vpToPath.f;
+            }
+            
+            let nx = localPivotX + (rx - localPivotX) * scaleX;
+            let ny = localPivotY + (ry - localPivotY) * scaleY;
+            
+            const updateRect = (r: SVGRectElement) => {
+              r.setAttribute('x', `${nx}`);
+              r.setAttribute('y', `${ny}`);
+              r.setAttribute('width', `${rw * scaleX}`);
+              r.setAttribute('height', `${rh * scaleY}`);
+            };
+            updateRect(bgRect);
+            updateRect(clipRect);
+            return;
+          }
+        }
+
         const transformList = el.transform.baseVal;
         let matrixTransform = transformList.consolidate();
         if (!matrixTransform) {
