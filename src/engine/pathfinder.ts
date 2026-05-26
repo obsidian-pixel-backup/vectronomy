@@ -18,15 +18,29 @@ export class Pathfinder {
     this.init();
     paper.project.clear();
 
-    const item1 = paper.project.importSVG(svg1) as paper.Item;
-    const item2 = paper.project.importSVG(svg2) as paper.Item;
+    const item1 = paper.project.importSVG(svg1, { expandShapes: true }) as paper.Item;
+    const item2 = paper.project.importSVG(svg2, { expandShapes: true }) as paper.Item;
 
     const path1 = this.findPath(item1);
     const path2 = this.findPath(item2);
 
     if (!path1 || !path2) return null;
 
+    if (!isStrokeOnly) {
+      [path1, path2].forEach(p => {
+        if (!p.fillColor) p.fillColor = new paper.Color(0, 0, 0, 1);
+        if (p instanceof paper.CompoundPath) {
+           for (const child of p.children) {
+               if (child instanceof paper.Path) child.closed = true;
+           }
+        } else if (p instanceof paper.Path) {
+           p.closed = true;
+        }
+      });
+    }
+
     let result: paper.Item | null = null;
+    let noChange = false;
 
     switch (operation) {
       case 'unite':
@@ -36,18 +50,13 @@ export class Pathfinder {
         // Use the explicit flag to determine if it's stroke-only
         if (isStrokeOnly) {
           result = this.eraseStroke(path1, path2);
-          if (result === path1) return null; // unchanged
-          if (!result) return `<svg></svg>`; // Return empty if completely erased
+          if (result === path1) noChange = true;
         } else {
-          // If it has a fill, we must make sure it behaves as filled in paper.js
-          if (!path1.fillColor) {
-             path1.fillColor = new paper.Color(0, 0, 0, 1);
-          }
           // Only subtract if they intersect or one is inside the other
           if (path1.intersects(path2) || path1.contains(path2.bounds.center) || path2.contains(path1.bounds.center)) {
             result = path1.subtract(path2);
           } else {
-            return null; // Return null if no modification is needed
+            noChange = true;
           }
         }
         break;
@@ -59,7 +68,12 @@ export class Pathfinder {
         break;
     }
 
-    if (!result) return null;
+    if (noChange) return null;
+    
+    // If the boolean operation resulted in an empty shape (e.g. disjoint intersect)
+    if (!result || (typeof result.isEmpty === 'function' && result.isEmpty())) {
+      return `<svg></svg>`;
+    }
 
     // Export back to SVG string
     const resultSvg = result.exportSVG({ asString: true }) as string;
@@ -68,9 +82,10 @@ export class Pathfinder {
 
   private static eraseStroke(target: paper.PathItem, eraser: paper.PathItem): paper.Item | null {
     if (target instanceof paper.CompoundPath) {
-      const group = new paper.Group({ insert: false });
+      const group = new paper.Group();
       let anyChanged = false;
-      for (const child of target.children) {
+      const children = [...target.children];
+      for (const child of children) {
         if (child instanceof paper.Path) {
           const res = this.eraseSingleStroke(child, eraser);
           if (res === null) anyChanged = true;
@@ -78,7 +93,8 @@ export class Pathfinder {
           
           if (res) {
             // We must clone it if it's the original child, because we can't move it directly from the CompoundPath without messing up iteration
-            group.addChild(res === child ? child.clone({ insert: false }) : res);
+            const finalRes = res === child ? child.clone({ insert: false }) : res;
+            group.addChild(finalRes);
           }
         }
       }
@@ -93,13 +109,23 @@ export class Pathfinder {
   private static eraseSingleStroke(path: paper.Path, eraser: paper.PathItem): paper.Item | null {
     let intersections = path.getIntersections(eraser);
     if (intersections.length === 0) {
-      if (path.segments.length > 0 && eraser.contains(path.segments[0].point)) {
-        return null;
+      let isInside = false;
+      if (path.segments.length > 0) {
+        isInside = eraser.contains(path.segments[0].point);
+      }
+      if (!isInside && path.length > 0) {
+        const midPt = path.getPointAt(path.length / 2);
+        if (midPt) isInside = eraser.contains(midPt);
+      }
+      
+      if (isInside) {
+        return null; // Entire stroke is inside the eraser
       }
       return path; // Return original reference indicating unchanged
     }
 
     let workingPath = path.clone({ insert: false }) as paper.Path;
+    paper.project.activeLayer.addChild(workingPath);
     
     // If the path is closed, opening it shifts the offsets.
     // So we open it at the first intersection, then re-calculate intersections on the now-open path.
@@ -122,7 +148,7 @@ export class Pathfinder {
     }
     pieces.unshift(workingPath);
 
-    const keepGroup = new paper.Group({ insert: false });
+    const keepGroup = new paper.Group();
     for (const piece of pieces) {
       if (piece.length === 0) continue;
       const midpoint = piece.getPointAt(piece.length / 2);
@@ -139,23 +165,27 @@ export class Pathfinder {
   private static findPath(item: paper.Item): paper.PathItem | null {
     if (item instanceof paper.PathItem) {
       const cloned = item.clone({ insert: false }) as paper.PathItem;
+      paper.project.activeLayer.addChild(cloned);
+      
+      // Prevent double transformation. SVG imports apply transforms to the matrix.
+      // We want to bake the global transform completely into the Path coordinates.
+      cloned.applyMatrix = false;
+      cloned.matrix.reset();
+      cloned.applyMatrix = true;
       cloned.transform(item.globalMatrix);
       return cloned;
     }
-    if (item instanceof paper.Shape) {
-      const path = item.toPath(false);
-      path.transform(item.globalMatrix);
-      return path;
-    }
+
     if (item.children) {
       let combined: paper.PathItem | null = null;
-      for (const child of item.children) {
+      const children = [...item.children];
+      for (const child of children) {
         const found = this.findPath(child);
         if (found) {
           if (!combined) {
             combined = found;
           } else {
-            combined = combined.unite(found, { insert: false }) as paper.PathItem;
+            combined = combined.unite(found) as paper.PathItem;
           }
         }
       }

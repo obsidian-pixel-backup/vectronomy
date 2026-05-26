@@ -258,24 +258,56 @@ export class VectorEditor {
         // Parse the result back into DOM
         const parser = new DOMParser();
         const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
-        const newEl = doc.querySelector('path, rect, circle, ellipse, polygon');
-        if (newEl) {
+        let newEl = doc.documentElement.firstElementChild as SVGGraphicsElement | null;
+        
+        const parent = baseEl.parentNode;
+        if (!parent) continue;
+
+        if (newEl && newEl.tagName.toLowerCase() !== 'svg') {
            newEl.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.random().toString(36).substr(2,6)}`);
-           // Replace the two old elements with the new one
-           const parent = baseEl.parentNode;
-           if (parent) {
-             parent.insertBefore(newEl, baseEl);
-             parent.removeChild(baseEl);
+           
+           // Copy styling attributes from baseEl
+           const ignoredAttrs = ['d', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'points', 'data-xcs-id', 'transform'];
+           Array.from(baseEl.attributes).forEach(attr => {
+             if (!ignoredAttrs.includes(attr.name)) {
+               newEl!.setAttribute(attr.name, attr.value);
+             }
+           });
+
+           parent.insertBefore(newEl, baseEl);
+           parent.removeChild(baseEl);
+           if (targetEl.parentNode === parent) {
              parent.removeChild(targetEl);
            }
-           baseEl = newEl as SVGGraphicsElement;
+           baseEl = newEl;
+        } else {
+           // Empty result (e.g. disjoint intersect or fully subtracted)
+           parent.removeChild(baseEl);
+           if (targetEl.parentNode === parent) {
+               parent.removeChild(targetEl);
+           }
+           
+           // Create a dummy hidden path to keep the loop going if there are more elements
+           baseEl = document.createElementNS('http://www.w3.org/2000/svg', 'path') as SVGGraphicsElement;
+           baseEl.setAttribute('d', ''); // empty
+           parent.appendChild(baseEl);
         }
       }
     }
+    
     this.clearSelection();
-    this.selectedIds.add(baseEl.getAttribute('data-xcs-id')!);
-    this.selectedId = baseEl.getAttribute('data-xcs-id')!;
-    this.renderSelectionUI();
+    
+    // Clean up if baseEl is a dummy empty path
+    if (baseEl.tagName.toLowerCase() === 'path' && !baseEl.getAttribute('d')) {
+       if (baseEl.parentNode) baseEl.parentNode.removeChild(baseEl);
+    } else {
+       const id = baseEl.getAttribute('data-xcs-id');
+       if (id) {
+         this.selectedIds.add(id);
+         this.selectedId = id;
+         this.renderSelectionUI();
+       }
+    }
     this.commit();
   }
   
@@ -1053,6 +1085,7 @@ export class VectorEditor {
         this.eraserPoints = [{ x: pt.x, y: pt.y }];
         this.eraserModified = false;
         this.eraserCache.clear(); // Clear cache at start of stroke
+        this.updateBrushCursor(pt); // Immediately show cursor
         this.performVectorEraser(this.eraserPoints, this.brushSize);
         // Do not create drawingEl for eraser
         break;
@@ -1092,7 +1125,7 @@ export class VectorEditor {
   }
 
   private updateDraw(e: MouseEvent) {
-    if (!this.drawingEl) return;
+    if (!this.drawingEl && this.activeTool !== 'eraser') return;
     
     if (this.activeTool === 'pen') {
       const pt = this.getSvgPoint(e);
@@ -1108,11 +1141,11 @@ export class VectorEditor {
         this.penDraggingPoint.cp1y = this.penDraggingPoint.y - dy;
 
         const d = this.getPathD(this.penPoints);
-        this.drawingEl.setAttribute('d', d);
+        this.drawingEl!.setAttribute('d', d);
       } else {
         const previewPt: PenPoint = { x: pt.x, y: pt.y };
         const d = this.getPathD(this.penPoints, false, previewPt);
-        this.drawingEl.setAttribute('d', d);
+        this.drawingEl!.setAttribute('d', d);
       }
       
       this.renderPenOverlay(pt);
@@ -1147,24 +1180,24 @@ export class VectorEditor {
       case 'rect': {
         const x = dx < 0 ? pt.x : this.drawStartX;
         const y = dy < 0 ? pt.y : this.drawStartY;
-        this.drawingEl.setAttribute('x', `${x}`);
-        this.drawingEl.setAttribute('y', `${y}`);
-        this.drawingEl.setAttribute('width', `${Math.abs(dx)}`);
-        this.drawingEl.setAttribute('height', `${Math.abs(dy)}`);
+        this.drawingEl!.setAttribute('x', `${x}`);
+        this.drawingEl!.setAttribute('y', `${y}`);
+        this.drawingEl!.setAttribute('width', `${Math.abs(dx)}`);
+        this.drawingEl!.setAttribute('height', `${Math.abs(dy)}`);
         break;
       }
       case 'circle':
-        this.drawingEl.setAttribute('rx', `${Math.abs(dx)}`);
-        this.drawingEl.setAttribute('ry', `${Math.abs(dy)}`);
+        this.drawingEl!.setAttribute('rx', `${Math.abs(dx)}`);
+        this.drawingEl!.setAttribute('ry', `${Math.abs(dy)}`);
         break;
       case 'line':
-        this.drawingEl.setAttribute('x2', `${pt.x}`);
-        this.drawingEl.setAttribute('y2', `${pt.y}`);
+        this.drawingEl!.setAttribute('x2', `${pt.x}`);
+        this.drawingEl!.setAttribute('y2', `${pt.y}`);
         break;
       case 'polyline': {
         const tempPoints = [...this.polylinePoints, { x: pt.x, y: pt.y }];
         const ptsStr = tempPoints.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
-        this.drawingEl.setAttribute('points', ptsStr);
+        this.drawingEl!.setAttribute('points', ptsStr);
         break;
       }
       case 'polygon': {
@@ -1178,7 +1211,7 @@ export class VectorEditor {
           const py = this.drawStartY + r * Math.sin(angle);
           points.push(`${px.toFixed(1)},${py.toFixed(1)}`);
         }
-        this.drawingEl.setAttribute('points', points.join(' '));
+        this.drawingEl!.setAttribute('points', points.join(' '));
         break;
       }
       case 'star': {
@@ -1195,7 +1228,7 @@ export class VectorEditor {
           const py = this.drawStartY + r * Math.sin(angle);
           points.push(`${px.toFixed(1)},${py.toFixed(1)}`);
         }
-        this.drawingEl.setAttribute('points', points.join(' '));
+        this.drawingEl!.setAttribute('points', points.join(' '));
         break;
       }
       case 'spiral': {
@@ -1215,23 +1248,28 @@ export class VectorEditor {
           const py = this.drawStartY + r * Math.sin(theta + baseAngle);
           pathPoints.push(`${i === 0 ? 'M' : 'L'} ${px.toFixed(1)} ${py.toFixed(1)}`);
         }
-        this.drawingEl.setAttribute('d', pathPoints.join(' '));
+        this.drawingEl!.setAttribute('d', pathPoints.join(' '));
         break;
       }
       case 'pencil': {
         this.pencilPoints.push({ x: pt.x, y: pt.y });
         const d = this.pencilPoints.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
-        this.drawingEl.setAttribute('d', d);
+        this.drawingEl!.setAttribute('d', d);
         break;
       }
       case 'brush': {
         this.brushPoints.push({ x: pt.x, y: pt.y });
-        this.drawingEl.setAttribute('d', this.getSmoothedPencilD(this.brushPoints));
+        this.drawingEl!.setAttribute('d', this.getSmoothedPencilD(this.brushPoints));
         break;
       }
       case 'eraser': {
         const lastPt = this.eraserPoints[this.eraserPoints.length - 1];
         const currentPt = { x: pt.x, y: pt.y };
+        
+        // Prevent massive calculation spikes by throttling tiny mouse movements
+        const dist = Math.hypot(currentPt.x - lastPt.x, currentPt.y - lastPt.y);
+        if (dist < 4) break;
+        
         this.eraserPoints.push(currentPt);
         this.performVectorEraser([lastPt, currentPt], this.brushSize);
         break;
@@ -1365,7 +1403,7 @@ export class VectorEditor {
           const elBox = this.getBBoxInViewport(el as SVGGraphicsElement, viewport as SVGGElement);
           const computedStyle = window.getComputedStyle(el);
           const isStrokeOnly = computedStyle.fill === 'none' || computedStyle.fill === 'rgba(0, 0, 0, 0)' || computedStyle.fill === 'transparent';
-          cached = { bbox: elBox, isStrokeOnly };
+          cached = { bbox: elBox as DOMRect, isStrokeOnly };
           this.eraserCache.set(el, cached);
         }
 
@@ -1391,7 +1429,14 @@ export class VectorEditor {
         const computedStyle = window.getComputedStyle(el);
         const isStrokeOnly = computedStyle.fill === 'none' || computedStyle.fill === 'rgba(0, 0, 0, 0)' || computedStyle.fill === 'transparent';
 
-        const result = Pathfinder.performOperation(elSvgStr, localEraserSvgStr, 'subtract', isStrokeOnly);
+        let result: string | null = null;
+        try {
+          result = Pathfinder.performOperation(elSvgStr, localEraserSvgStr, 'subtract', isStrokeOnly);
+        } catch (err) {
+          console.warn('Paper.js boolean operation error (skipping fragment):', err);
+          return;
+        }
+
         if (result) {
           const parser = new DOMParser();
           const doc = parser.parseFromString(result, 'image/svg+xml');
