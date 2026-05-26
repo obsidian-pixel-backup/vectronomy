@@ -220,7 +220,6 @@ export class VectorEditor {
       this.finalizePolyline();
     }
     this.activeTool = tool;
-    this.clearSelection();
     this.penPoints = [];
     this.penDraggingPoint = null;
     this.renderPenOverlay(); // Clear overlay
@@ -311,16 +310,21 @@ export class VectorEditor {
     if (e.button === 1 || this.activeTool === 'pan') return;
     const target = e.target as SVGElement;
     if (this.activeTool === 'magic-wand') {
-      const targetEl = target.closest('[data-xcs-id]') as SVGElement | null;
-      if (targetEl && targetEl.parentElement?.id === 'viewport') {
+      const targetEl = target.closest('[data-xcs-id]:not(.vectronomy-frame)') || target.closest('[data-xcs-id]') as SVGElement | null;
+      if (targetEl) {
         const targetFill = targetEl.getAttribute('fill') || 'none';
         const targetStroke = targetEl.getAttribute('stroke') || 'none';
         
         if (!e.shiftKey) this.clearSelection();
         
-        const allElements = document.getElementById('viewport')?.querySelectorAll('[data-xcs-id]');
+        const mainSvg = this.container.querySelector('svg');
+        const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+        const allElements = viewport?.querySelectorAll('[data-xcs-id]');
+        
         if (allElements) {
           allElements.forEach(el => {
+            if (el.tagName.toLowerCase() === 'g' && el.classList.contains('vectronomy-frame')) return;
+            
             const fill = el.getAttribute('fill') || 'none';
             const stroke = el.getAttribute('stroke') || 'none';
             // Select elements that share the same dominant color
@@ -348,6 +352,7 @@ export class VectorEditor {
       } else if (!e.shiftKey) {
         this.clearSelection();
       }
+      return;
       return;
     }
 
@@ -894,6 +899,7 @@ export class VectorEditor {
 
 
   private startDraw(e: MouseEvent) {
+    if (!this.isDrawing) this.clearSelection();
     const mainSvg = this.container.querySelector('svg');
     const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
     if (!mainSvg || !viewport) return;
@@ -1371,7 +1377,10 @@ export class VectorEditor {
         elClone.removeAttribute('transform');
         const elSvgStr = `<svg xmlns="http://www.w3.org/2000/svg">${elClone.outerHTML}</svg>`;
         
-        const result = Pathfinder.performOperation(elSvgStr, localEraserSvgStr, 'subtract');
+        const computedStyle = window.getComputedStyle(el);
+        const isStrokeOnly = computedStyle.fill === 'none' || computedStyle.fill === 'rgba(0, 0, 0, 0)' || computedStyle.fill === 'transparent';
+
+        const result = Pathfinder.performOperation(elSvgStr, localEraserSvgStr, 'subtract', isStrokeOnly);
         if (result) {
           const parser = new DOMParser();
           const doc = parser.parseFromString(result, 'image/svg+xml');

@@ -14,7 +14,7 @@ export class Pathfinder {
    * Performs a boolean operation between two or more SVG paths.
    * Takes SVG strings of the elements, and returns the SVG string of the result.
    */
-  static performOperation(svg1: string, svg2: string, operation: BooleanOp): string | null {
+  static performOperation(svg1: string, svg2: string, operation: BooleanOp, isStrokeOnly: boolean = false): string | null {
     this.init();
     paper.project.clear();
 
@@ -33,11 +33,16 @@ export class Pathfinder {
         result = path1.unite(path2);
         break;
       case 'subtract':
-        // If the path has no fill, perform stroke erasure (curve splitting)
-        if (!path1.fillColor || path1.fillColor.alpha === 0) {
+        // Use the explicit flag to determine if it's stroke-only
+        if (isStrokeOnly) {
           result = this.eraseStroke(path1, path2);
+          if (result === path1) return null; // unchanged
           if (!result) return `<svg></svg>`; // Return empty if completely erased
         } else {
+          // If it has a fill, we must make sure it behaves as filled in paper.js
+          if (!path1.fillColor) {
+             path1.fillColor = new paper.Color(0, 0, 0, 1);
+          }
           // Only subtract if they intersect or one is inside the other
           if (path1.intersects(path2) || path1.contains(path2.bounds.center) || path2.contains(path1.bounds.center)) {
             result = path1.subtract(path2);
@@ -58,18 +63,26 @@ export class Pathfinder {
 
     // Export back to SVG string
     const resultSvg = result.exportSVG({ asString: true }) as string;
-    return resultSvg;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
   }
 
   private static eraseStroke(target: paper.PathItem, eraser: paper.PathItem): paper.Item | null {
     if (target instanceof paper.CompoundPath) {
       const group = new paper.Group({ insert: false });
+      let anyChanged = false;
       for (const child of target.children) {
         if (child instanceof paper.Path) {
           const res = this.eraseSingleStroke(child, eraser);
-          if (res) group.addChild(res);
+          if (res === null) anyChanged = true;
+          else if (res !== child) anyChanged = true;
+          
+          if (res) {
+            // We must clone it if it's the original child, because we can't move it directly from the CompoundPath without messing up iteration
+            group.addChild(res === child ? child.clone({ insert: false }) : res);
+          }
         }
       }
+      if (!anyChanged) return target;
       return group.children.length > 0 ? group : null;
     } else if (target instanceof paper.Path) {
       return this.eraseSingleStroke(target, eraser);
@@ -78,24 +91,32 @@ export class Pathfinder {
   }
 
   private static eraseSingleStroke(path: paper.Path, eraser: paper.PathItem): paper.Item | null {
-    const intersections = path.getIntersections(eraser);
+    let intersections = path.getIntersections(eraser);
     if (intersections.length === 0) {
-      // No intersections, check if entirely inside eraser
       if (path.segments.length > 0 && eraser.contains(path.segments[0].point)) {
         return null;
       }
-      return path.clone({ insert: false });
+      return path; // Return original reference indicating unchanged
     }
 
-    // Sort by offset descending to split from end to start safely
-    intersections.sort((a, b) => b.offset - a.offset);
+    let workingPath = path.clone({ insert: false }) as paper.Path;
+    
+    // If the path is closed, opening it shifts the offsets.
+    // So we open it at the first intersection, then re-calculate intersections on the now-open path.
+    if (workingPath.closed) {
+      workingPath.splitAt(intersections[0].offset);
+      intersections = workingPath.getIntersections(eraser);
+    }
 
-    const workingPath = path.clone({ insert: false }) as paper.Path;
+    intersections.sort((a, b) => b.offset - a.offset);
     const pieces: paper.Path[] = [];
 
     for (const inter of intersections) {
+      // Skip splitting if offset is very close to ends
+      if (inter.offset < 1 || inter.offset > workingPath.length - 1) continue;
+      
       const splitResult = workingPath.splitAt(inter.offset);
-      if (splitResult) {
+      if (splitResult && splitResult !== workingPath) {
         pieces.unshift(splitResult);
       }
     }
