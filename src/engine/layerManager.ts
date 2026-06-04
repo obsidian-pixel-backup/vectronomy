@@ -118,9 +118,73 @@ export class LayerManager {
 
       const label = document.createElement('div');
       label.className = 'layer-item-content';
-      label.textContent = el.tagName.toLowerCase();
-      // maybe add a snippet of text if it's a text node, or ID
-      if (el.id && el.id !== 'viewport') label.textContent += ` #${el.id}`;
+      const customName = el.getAttribute('data-layer-name');
+      if (customName) {
+        label.textContent = customName;
+      } else {
+        let name = el.tagName.toLowerCase();
+        if (name === 'g') name = 'Group';
+        else if (name === 'path') name = 'Path';
+        else if (name === 'rect') name = 'Rectangle';
+        else if (name === 'circle') name = 'Circle';
+        else if (name === 'ellipse') name = 'Ellipse';
+        else if (name === 'polygon') name = 'Polygon';
+        else if (name === 'line') name = 'Line';
+        else if (name === 'polyline') name = 'Polyline';
+        else if (name === 'text') name = 'Text';
+        else if (name === 'image') name = 'Image';
+        label.textContent = name;
+        if (el.id && el.id !== 'viewport') label.textContent += ` #${el.id}`;
+      }
+      
+      label.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const currentName = customName || label.textContent || '';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'layer-rename-input';
+        input.value = currentName;
+        input.style.width = '100%';
+        input.style.background = 'rgba(0,0,0,0.2)';
+        input.style.border = '1px solid #4a90e2';
+        input.style.color = 'inherit';
+        input.style.outline = 'none';
+        input.style.padding = '2px';
+        input.style.borderRadius = '2px';
+        
+        label.textContent = '';
+        label.appendChild(input);
+        input.focus();
+        input.select();
+
+        let finished = false;
+        const finishRename = () => {
+          if (finished) return;
+          finished = true;
+          const newName = input.value.trim();
+          if (newName) {
+            el.setAttribute('data-layer-name', newName);
+          } else {
+            el.removeAttribute('data-layer-name');
+          }
+          this.editor.commit();
+          this.updateTree();
+        };
+
+        input.addEventListener('blur', finishRename);
+        input.addEventListener('keydown', (ke) => {
+          if (ke.key === 'Enter') {
+            ke.preventDefault();
+            finishRename();
+          }
+          if (ke.key === 'Escape') {
+            ke.preventDefault();
+            finished = true;
+            this.updateTree();
+          }
+        });
+      });
+
       rowDiv.appendChild(label);
 
       // Lock icon
@@ -218,6 +282,7 @@ export class LayerManager {
     const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     const groupId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
     group.setAttribute('data-xcs-id', groupId);
+    group.setAttribute('data-layer-name', 'Group');
     
     // Assign random group color immediately
     const gColor = this.groupColors[Math.floor(Math.random() * this.groupColors.length)];

@@ -232,7 +232,7 @@ export class VectorFactory {
     const transformAttr = transform.isIdentity() ? '' : ` transform="${transform.toSVG()}"`;
     const maskAttr = el.mask ? ` clip-path="url(#mask-${el.mask.id})"` : '';
     const idAttr = el.id ? ` data-xcs-id="${el.id}"` : '';
-    return `<ellipse cx="${rx}" cy="${ry}" rx="${rx}" ry="${ry}"${transformAttr}${maskAttr}${idAttr} ${attrs} />`;
+    return `<ellipse cx="0" cy="0" rx="${rx}" ry="${ry}"${transformAttr}${maskAttr}${idAttr} ${attrs} />`;
   }
 
   /**

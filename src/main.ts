@@ -640,6 +640,7 @@ function initEditor() {
       const layer = convertedLayers[activeLayerIndex];
       if (layer) layer.svg = newSvg;
       pushUndo(newSvg);
+      if (layerManager) layerManager.updateTree();
     },
     (props) => {
       suppressPropUpdates = true;
@@ -652,6 +653,7 @@ function initEditor() {
         propsSelection.hidden = true;
       }
       suppressPropUpdates = false;
+      if (layerManager) layerManager.updateTree();
     },
     () => { currentDisablePan = true; if (panzoom) panzoom.setOptions({ disablePan: true }); },
     () => { currentDisablePan = false; if (panzoom) panzoom.setOptions({ disablePan: false }); },
@@ -739,6 +741,18 @@ function initEditor() {
       e.preventDefault();
       if (gridManager) gridManager.toggleGrid();
     }
+    if (!inInput && (e.ctrlKey || e.metaKey) && e.key === 'g') {
+      e.preventDefault();
+      if (e.shiftKey) {
+        if (layerManager) layerManager.ungroupSelected();
+      } else {
+        if (layerManager) layerManager.groupSelected();
+      }
+    }
+    if (!inInput && e.shiftKey && (e.key === "'" || e.key === '"')) {
+      e.preventDefault();
+      if (gridManager) gridManager.toggleSnap();
+    }
 
     // Arrow key micro-adjustments / nudging
     if (!inInput && ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
@@ -752,6 +766,18 @@ function initEditor() {
       if (e.key === 'ArrowDown') dy = nudgeAmount;
       
       editor?.nudgeSelected(dx, dy);
+    }
+  });
+
+  // Global handler for mid-mouse pan across any tool
+  window.addEventListener('pointerdown', (e) => {
+    if (e.button === 1 && panzoom) {
+      panzoom.setOptions({ disablePan: false });
+    }
+  });
+  window.addEventListener('pointerup', (e) => {
+    if (e.button === 1 && panzoom) {
+      panzoom.setOptions({ disablePan: currentDisablePan });
     }
   });
 
@@ -1021,7 +1047,7 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
   }
 
   panzoom = Panzoom(svgEl, {
-    maxScale: 10000, minScale: 0.0001, step: 0.12,
+    maxScale: 10000, minScale: 0.0001, step: 0.1,
     startScale, startX, startY,
     disablePan: currentDisablePan,
     setTransform: (elem, { scale, x, y }) => {
@@ -1039,7 +1065,7 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
       // Don't interfere with selection/transform handles
       if (t.closest('[data-handle-id]')) return;
       // For pan tool: fully hand off to Panzoom
-      if (editor?.activeTool === 'pan') {
+      if (editor?.activeTool === 'pan' || e.button === 1) {
         e.preventDefault();
         return;
       }
@@ -1067,7 +1093,7 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
     const oldTy = pan.y * oldScale;
 
     // Zoom speed step and boundaries
-    const zoomFactor = 1.15;
+    const zoomFactor = 1.05;
     let newScale = oldScale;
     if (e.deltaY < 0) {
       newScale = Math.min(10000, oldScale * zoomFactor);
@@ -1165,12 +1191,15 @@ document.getElementById('btn-zoom-in')!.addEventListener('click', () => { panzoo
 
 document.getElementById('btn-collapse-controls')?.addEventListener('click', () => {
   document.getElementById('preview-controls')?.classList.toggle('collapsed');
-  setTimeout(() => fitSvgToView(previewContainer.querySelector('svg') as SVGSVGElement), 310);
 });
 
 document.getElementById('btn-toggle-rulers')?.addEventListener('click', () => {
-  document.getElementById('ruler-canvas-wrap')?.classList.toggle('hide-rulers');
-  setTimeout(() => fitSvgToView(previewContainer.querySelector('svg') as SVGSVGElement), 10);
+  setTimeout(() => {
+    if (panzoom) {
+      const pan = panzoom.getPan();
+      panzoom.pan(pan.x, pan.y, { animate: false });
+    }
+  }, 10);
 });
 document.getElementById('btn-zoom-out')!.addEventListener('click', () => { panzoom?.zoomOut(); updateZoomDisplay(); });
 document.getElementById('btn-zoom-fit')!.addEventListener('click', () => {
@@ -1421,20 +1450,48 @@ if (btnGridSettings && gridSettingsMenu) {
   });
 }
 
-// ── Properties Panel Collapse ────────────────────────────────────
-const btnPropCollapse = document.getElementById('btn-prop-collapse');
+// ── Right Panel Collapse & Tabs ────────────────────────────────────
+const btnRightCollapse = document.getElementById('btn-prop-collapse') || document.getElementById('btn-right-collapse');
 const editorLayout = document.querySelector('.editor-layout');
 
-if (btnPropCollapse && editorLayout) {
-  btnPropCollapse.addEventListener('click', () => {
-    editorLayout.classList.toggle('props-collapsed');
-    
-    // Trigger window resize to ensure panzoom / canvas bounds update correctly
-    setTimeout(() => {
-      window.dispatchEvent(new Event('resize'));
-    }, 310); // Wait for CSS transition to finish
+if (btnRightCollapse && editorLayout) {
+  btnRightCollapse.addEventListener('click', () => {
+    editorLayout.classList.toggle('right-collapsed');
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 310);
   });
 }
+
+// Tabs logic
+const tabBtns = document.querySelectorAll('.tab-btn');
+tabBtns.forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    const targetId = btn.getAttribute('data-target');
+    if (!targetId) return;
+
+    // If panel is collapsed, expand it
+    if (editorLayout?.classList.contains('right-collapsed')) {
+      editorLayout.classList.remove('right-collapsed');
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 310);
+    }
+
+    // Update active tab
+    tabBtns.forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Update content visibility
+    const rightPanel = document.getElementById('right-panel');
+    if (rightPanel) {
+      const contents = rightPanel.querySelectorAll('.panel-content');
+      contents.forEach(c => {
+        if (c.id === targetId) {
+          (c as HTMLElement).style.display = '';
+        } else {
+          (c as HTMLElement).style.display = 'none';
+        }
+      });
+    }
+  });
+});
 
 // ── Import Dropdown Events ───────────────────────────────────────
 const importToggle = document.getElementById('btn-import-toggle');
@@ -1736,8 +1793,13 @@ function openFeatureModal(feat: Feature, div: Division) {
     modalFeatUsage.textContent = FEATURE_DOCS[feat.id].usage;
     modalFeatTech.textContent = FEATURE_DOCS[feat.id].tech;
   } else {
-    modalFeatReadme.textContent = "This feature is currently in the active planning phase. We are designing native integrations to satisfy this target soon!";
-    modalFeatUsage.textContent = "Usage guidelines will be made available as soon as this feature moves into the active deployment phase.";
+    if (COMPLETED_FEATURES.has(feat.id)) {
+      modalFeatReadme.textContent = `Documentation for ${feat.title} is currently being finalized.`;
+      modalFeatUsage.textContent = `The core functionality for ${feat.title} is fully deployed and active in the engine.`;
+    } else {
+      modalFeatReadme.textContent = "This feature is currently in the active planning phase. We are designing native integrations to satisfy this target soon!";
+      modalFeatUsage.textContent = "Usage guidelines will be made available as soon as this feature moves into the active deployment phase.";
+    }
     modalFeatTech.textContent = `Technical Specifications:\n${feat.technicalIntegration}`;
   }
   
