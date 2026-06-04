@@ -1,0 +1,125 @@
+# Vectronomy
+
+> Free XCS to SVG converter online and professional-grade browser-based vector editor for laser cutting, CNC, and digital fabrication.
+
+## What is Vectronomy?
+
+Vectronomy is a free online vector editor and XCS to SVG converter that runs entirely in your browser. It converts xTool Creative Space (.xcs) project files to clean, standards-compliant SVG files. Beyond conversion, it is a full-featured vector graphics editor — a free alternative to Adobe Illustrator and Inkscape that requires no downloads, no accounts, and no subscriptions.
+
+## XCS to SVG Converter
+
+Vectronomy is the only free online XCS to SVG converter. It lets you:
+- **Open XCS files** without installing xTool Creative Space
+- **Convert XCS to SVG** with full layer fidelity
+- **View XCS files** directly in your browser
+- **Export XCS projects** as SVG, PNG, or JPEG
+- **Use XCS files** with other laser cutters (Lightburn, LaserGRBL, Glowforge, Epilog, etc.)
+
+### How to convert XCS to SVG:
+1. Open vectronomy.vercel.app in your browser
+2. Drag and drop your .xcs file onto the workspace
+3. Vectronomy parses and renders all vector layers
+4. Click Export SVG to download clean, laser-ready vector files
+
+### What is an XCS file?
+XCS files are project files created by xTool Creative Space, the design software for xTool laser cutters and engravers. They contain vector layers, raster images, and machine settings in a proprietary format. Vectronomy is the only tool that can open and convert these files outside of xTool Creative Space.
+
+## Online Vector Editor Features
+
+### Drawing Tools
+- **Bezier Pen Tool** — Create precise vector curves with anchor points and handles
+- **Pencil Tool** — Freehand drawing with automatic path smoothing
+- **Shape Tools** — Rectangle, circle, ellipse, polygon, star, spiral
+- **Line Tools** — Line, polyline for precise straight segments
+- **Brush & Eraser** — Variable-size brush and eraser with style options
+- **Frame Tool** — Artboard management for multi-frame projects
+- **Node Editor** — Direct manipulation of anchor points, handles, and path segments
+
+### Path Operations
+- **Unite** — Merge multiple shapes into one
+- **Subtract** — Cut one shape from another
+- **Intersect** — Keep only the overlapping area
+- **Exclude** — Remove the overlap and keep the rest
+- **Divide** — Split shapes at intersection points
+- **Path Flattening** — Convert curves to approximated line segments
+- **Path Reversal** — Reverse the direction of path segments
+
+### Image Tracing (Raster to Vector)
+- **Silhouette Trace** — Convert images to black/white vector outlines
+- **Centerline Trace** — Extract skeletal center paths from images
+- **Edge Detection** — High-pass edge detection for outline extraction
+- **Posterization** — Multi-color layered vector output from photographs
+
+### Fabrication & CNC Tools
+- **Kerf Offset** — Compensate for laser beam width
+- **Pocket Hatching** — Generate pocket clearing toolpaths
+- **Chamfering** — Create chamfer/bevel toolpaths
+- **Drill Conversion** — Convert circles to drill hole operations
+- **Milling Tabs** — Add holding tabs for CNC milling
+- **Concentric Hatching** — Generate concentric pocket clearing paths
+
+### Layer Management
+- Multi-layer workspace with named tabs
+- Group and ungroup elements
+- Lock layers to prevent editing
+- Z-order controls (bring to front, send to back, forward, backward)
+- Visual layer tree with color-coded groups
+
+### Alignment & Layout
+- Horizontal alignment: left, center, right
+- Vertical alignment: top, middle, bottom
+- Grid overlay with snap-to-grid
+- Interactive rulers with mm and inch units
+- Grid array creation for repeated patterns
+
+### Export Formats
+- **SVG** — Clean, standards-compliant scalable vector graphics
+- **PNG** — High-resolution raster export at 2x
+- **JPEG** — Compressed raster with white background
+- **Source Text** — Raw SVG code as text file
+- **Clipboard** — Copy SVG code directly
+- **Multi-layer batch export** — Download all layers as separate SVG files
+
+### Additional Features
+- Full undo/redo with drawing-level history
+- Dark mode and light mode with system theme detection
+- Drag and drop file import (SVG, XCS, PNG, JPEG)
+- Stroke and fill customization with color picker
+- Opacity controls for stroke and fill
+- Stroke cap and join settings
+- Interactive onboarding tours
+- Keyboard shortcuts for every tool
+- Custom hotkey mapping
+
+## Pages
+
+- `/` — Main Studio (XCS converter + vector editor)
+- `/roadmap` — Product roadmap with 140 planned features across 10 divisions
+- `/help` — Interactive help center with tutorials and keyboard shortcuts
+
+## Technical Details
+
+- Built with TypeScript and Vite
+- Client-side only — all processing happens in the browser, no server uploads
+- Works in all modern browsers with HTML5, Canvas, and SVG support
+- Open source, MIT Licensed
+- No account or registration required
+
+## Use Cases
+
+- Convert xTool Creative Space XCS files to SVG
+- Open XCS files without installing xTool software
+- Create laser cutting designs from scratch
+- Edit SVG files for CNC machining
+- Design vinyl cutter files
+- Create Cricut and Silhouette compatible SVGs
+- Trace raster images to vector (logo vectorization, photo tracing)
+- Design fabrication-ready technical drawings
+- Create SVG icons and logos
+- Boolean pathfinder operations for complex shapes
+- Precision node editing for professional vector work
+
+## Links
+
+- Website: https://vectronomy.vercel.app
+- GitHub: https://github.com/corned-dev/vectronomy

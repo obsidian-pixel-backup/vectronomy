@@ -84,16 +84,27 @@ export class UIManager {
     const btnSettings = document.getElementById('btn-sidebar-settings');
     const btnHotkeys = document.getElementById('btn-sidebar-hotkeys');
     const btnProjects = document.getElementById('btn-sidebar-projects');
+    const btnHeaderHotkeys = document.getElementById('btn-hotkeys');
     
     btnSettings?.addEventListener('click', () => {
       document.getElementById('btn-sidebar-close')?.click();
       this.showModal('modal-settings');
     });
 
-    btnHotkeys?.addEventListener('click', () => {
+    const openShortcutsHelp = () => {
       document.getElementById('btn-sidebar-close')?.click();
-      this.showModal('modal-hotkeys');
-    });
+      const helpBtn = document.getElementById('btn-help');
+      if (helpBtn) helpBtn.click();
+      
+      // Delay slightly to let the help modal render before clicking the tab
+      setTimeout(() => {
+        const shortcutsTab = document.querySelector('.help-nav-item[data-target="help-shortcuts"]') as HTMLButtonElement;
+        if (shortcutsTab) shortcutsTab.click();
+      }, 50);
+    };
+
+    btnHotkeys?.addEventListener('click', openShortcutsHelp);
+    btnHeaderHotkeys?.addEventListener('click', openShortcutsHelp);
 
     btnProjects?.addEventListener('click', () => {
       document.getElementById('btn-sidebar-close')?.click();
@@ -102,9 +113,6 @@ export class UIManager {
 
     document.getElementById('btn-settings-close')?.addEventListener('click', () => {
       this.hideModal('modal-settings');
-    });
-    document.getElementById('btn-hotkeys-close')?.addEventListener('click', () => {
-      this.hideModal('modal-hotkeys');
     });
     document.getElementById('btn-projects-close')?.addEventListener('click', () => {
       this.hideModal('modal-projects');
@@ -134,7 +142,13 @@ export class UIManager {
   private initHotkeys() {
     window.addEventListener('keydown', (e) => {
       if (e.key === '?' && !e.ctrlKey && !e.metaKey && e.target === document.body) {
-        this.showModal('modal-hotkeys');
+        const helpBtn = document.getElementById('btn-help');
+        if (helpBtn) helpBtn.click();
+        
+        setTimeout(() => {
+          const shortcutsTab = document.querySelector('.help-nav-item[data-target="help-shortcuts"]') as HTMLButtonElement;
+          if (shortcutsTab) shortcutsTab.click();
+        }, 50);
       }
     });
   }

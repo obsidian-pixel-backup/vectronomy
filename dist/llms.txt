@@ -1,0 +1,42 @@
+# Vectronomy
+
+> Professional-grade browser-based XCS to SVG converter and vector editing studio for laser cutting, CNC, and precision fabrication.
+
+## About
+
+Vectronomy is a free, open-source web application that runs entirely in your browser. It converts XCS project files (used by xTool laser cutters) into clean, production-ready SVG files. Beyond conversion, it provides a full vector editing studio with professional-grade tools.
+
+## Key Features
+
+- **XCS to SVG Conversion**: Drag-and-drop .xcs project files and instantly convert them to standards-compliant SVG
+- **Vector Drawing Tools**: Bezier pen, pencil, line, polyline, rectangle, circle, polygon, star, and spiral tools
+- **Node Editing**: High-precision anchor point and handle editing for full path control
+- **Pathfinder Operations**: Unite, subtract, intersect, exclude, and divide boolean operations
+- **Layer Management**: Multi-layer workspace with grouping, locking, and z-order control
+- **Align & Distribute**: Full alignment and distribution grid for precise layout
+- **Image Tracing**: Silhouette, centerline, edge detection, and posterized multi-color tracing
+- **CNC/Fabrication Tools**: Kerf offset, pocket hatching, chamfering, drilling, milling tabs, concentric hatching
+- **Export Options**: SVG, PNG, JPEG, source text, and clipboard export
+- **Grid & Snap**: Configurable grid overlay with snap-to-grid support
+- **Rulers**: Interactive rulers with real-world unit display (mm/inch)
+- **Undo/Redo**: Full undo/redo history with drawing-level granularity
+- **Dark/Light Theme**: System-aware theme switching
+- **No Account Required**: Everything runs locally in the browser — no sign-up, no data sent to servers
+
+## Pages
+
+- `/` — Main Studio (vector editor and XCS converter)
+- `/roadmap` — Product roadmap with 140 planned features across 10 divisions
+- `/help` — Interactive help center with tutorials and keyboard shortcut reference
+
+## Technical Details
+
+- Built with TypeScript and Vite
+- Client-side only — no server-side processing
+- Works in all modern browsers with HTML5, Canvas, and SVG support
+- MIT Licensed
+
+## Links
+
+- Website: https://vectronomy.vercel.app
+- GitHub: https://github.com/corned-dev/vectronomy

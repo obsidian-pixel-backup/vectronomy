@@ -21,8 +21,8 @@
   --text:         #e8e8f0;
   --text-primary: #e8e8f0;
   --text-secondary:#8888a0;
-  --text-dim:     #55556a;
-  --text-muted:   #55556a;
+  --text-dim:     #8888a0;
+  --text-muted:   #8888a0;
 
   --border:       rgba(255,255,255,0.06);
   --border-strong:rgba(255,255,255,0.11);
@@ -419,11 +419,29 @@ body::before {
 }
 
 .preview-controls {
-  position:absolute; top:12px; right:12px; z-index:10;
-  display:flex; flex-direction:column; gap:6px; align-items:center;
+  position:absolute; bottom:12px; right:12px; z-index:10;
+  display:flex; flex-direction:row; gap:6px; align-items:center;
   background:var(--bg-elevated); padding:6px;
   border-radius:var(--radius-md); border:1px solid var(--border-strong);
   box-shadow:var(--shadow-md);
+  transition: max-width var(--transition-base);
+}
+
+.preview-controls.collapsed .control-group {
+  display: none !important;
+}
+
+/* Hide rulers styles */
+.hide-rulers #ruler-h,
+.hide-rulers #ruler-v,
+.hide-rulers #ruler-origin-box,
+.hide-rulers #ruler-crosshair-h,
+.hide-rulers #ruler-crosshair-v {
+  display: none !important;
+}
+.hide-rulers #preview-container {
+  left: 0 !important;
+  top: 0 !important;
 }
 
 .zoom-level {
@@ -432,8 +450,11 @@ body::before {
 }
 
 .preview-container {
-  flex:1; width:100%; min-height:0;
-  display:flex; align-items:center; justify-content:center; overflow:hidden;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
   background-image:
     linear-gradient(45deg,var(--bg-tertiary) 25%,transparent 25%),
     linear-gradient(-45deg,var(--bg-tertiary) 25%,transparent 25%),
@@ -442,6 +463,7 @@ body::before {
   background-size:14px 14px;
   background-position:0 0,0 7px,7px -7px,-7px 0;
   cursor:default;
+  z-index: 1;
 }
 
 .preview-container svg {
@@ -521,6 +543,26 @@ body::before {
 .mini-track::after { content:''; position:absolute; top:2px; left:2px; width:9px; height:9px; background:var(--text-muted); border-radius:50%; transition:var(--transition-base); }
 .mini-toggle input:checked + .mini-track { background:var(--accent-glow); border-color:var(--border-accent); }
 .mini-toggle input:checked + .mini-track::after { transform:translateX(13px); background:var(--accent); }
+
+/* Pivot grid */
+.pivot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+}
+.pivot-btn {
+  width: 100%; height: 100%;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-strong);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.pivot-btn:hover { background: var(--bg-hover); border-color: var(--border-accent); }
+.pivot-btn.active { background: var(--accent); border-color: var(--accent); }
 
 /* Align grid */
 .align-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
@@ -2007,4 +2049,444 @@ html[data-theme="light"] #app-header {
 
 .sidebar-item:hover {
   background: var(--bg-hover);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PHASE 3 · BATCH 9 — CAD Precision & Layout Tools (Division 6)
+   Features 51–55: Rulers, Guidelines, Grid Subdivisions, Snapping
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Feature 51: Dynamic Layout Rulers ──────────────────────── */
+
+/*
+  The svg-preview now uses a sub-layout:
+    [origin][ruler-h]
+    [ruler-v][viewport]
+  achieved via CSS Grid on .ruler-canvas-wrap
+*/
+.ruler-canvas-wrap {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  grid-template-rows: 20px 1fr;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The tiny square in the top-left corner where rulers meet */
+.ruler-origin-box {
+  grid-column: 1;
+  grid-row: 1;
+  width: 20px;
+  height: 20px;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: background var(--transition-fast), color var(--transition-fast);
+  z-index: 5;
+}
+.ruler-origin-box:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
+/* Horizontal ruler canvas (top bar) */
+.ruler.ruler-horizontal {
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  height: 20px;
+  display: block;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  cursor: ns-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Vertical ruler canvas (left bar) */
+.ruler.ruler-vertical {
+  grid-column: 1;
+  grid-row: 2;
+  width: 20px;
+  height: 100%;
+  display: block;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Hover glow effect on rulers to signal drag-ability */
+.ruler.ruler-horizontal:hover {
+  background: linear-gradient(to bottom, var(--bg-hover) 0%, var(--bg-elevated) 100%);
+  border-bottom-color: var(--accent);
+}
+.ruler.ruler-vertical:hover {
+  background: linear-gradient(to right, var(--bg-hover) 0%, var(--bg-elevated) 100%);
+  border-right-color: var(--accent);
+}
+
+/* Active drag indicator on rulers */
+.ruler.dragging {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 8px rgba(0, 255, 194, 0.2);
+}
+
+/* When rulers are hidden */
+.ruler-canvas-wrap.rulers-hidden {
+  grid-template-columns: 0px 1fr;
+  grid-template-rows: 0px 1fr;
+}
+.ruler-canvas-wrap.rulers-hidden .ruler,
+.ruler-canvas-wrap.rulers-hidden .ruler-origin-box {
+  display: none;
+}
+
+/* ── Feature 51: Ruler Viewport ──────────────────────────────── */
+
+/* The main working area where the canvas sits */
+.ruler-viewport {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Feature 52: Drag-and-Drop Guidelines ───────────────────── */
+
+/* The full-viewport SVG that holds all guide lines and crosshairs */
+.guideline-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+  overflow: visible;
+}
+
+/* A placed guideline (horizontal or vertical) */
+.guideline-layer .guide-line {
+  stroke: rgba(0, 255, 194, 0.65);
+  stroke-width: 1;
+  stroke-dasharray: none;
+  vector-effect: non-scaling-stroke;
+  pointer-events: stroke;
+  cursor: ns-resize;
+  transition: stroke 0.12s ease, stroke-width 0.12s ease;
+}
+
+.guideline-layer .guide-line.guide-h { cursor: ns-resize; }
+.guideline-layer .guide-line.guide-v { cursor: ew-resize; }
+
+.guideline-layer .guide-line:hover,
+.guideline-layer .guide-line.hovered {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 4px rgba(0, 255, 194, 0.55));
+}
+
+.guideline-layer .guide-line.dragging-guide {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 3;
+  filter: drop-shadow(0 0 6px rgba(0, 255, 194, 0.7));
+}
+
+/* A small label tag showing coordinate on a guide */
+.guide-label {
+  position: absolute;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-accent);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  color: var(--accent);
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  z-index: 30;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.guide-label.visible { opacity: 1; }
+
+/* Ghost guideline — shown while dragging from ruler before dropping */
+.guide-ghost {
+  stroke: rgba(0, 255, 194, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  filter: drop-shadow(0 0 5px rgba(0, 255, 194, 0.3));
+}
+
+/* Cursor crosshair tracker lines (follow mouse, very subtle) */
+.ruler-crosshair {
+  stroke: rgba(0, 255, 194, 0.12);
+  stroke-width: 0.5;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+  opacity: 0;
+}
+/* Show crosshair when mouse is inside the viewport */
+.ruler-viewport:hover .ruler-crosshair {
+  opacity: 1;
+}
+
+/* ── Feature 53: Grid Subdivisions Manager ──────────────────── */
+
+/* Expanded grid settings menu — section heading labels */
+.grid-settings-section-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  padding: 2px 0 4px;
+  border-bottom: 1px solid var(--glass-border);
+  margin-bottom: 4px;
+}
+
+/* Thin divider between sections in the grid settings panel */
+.grid-settings-divider {
+  height: 1px;
+  background: var(--glass-border);
+  margin: 6px 0;
+}
+
+/* Number inputs inside grid settings use mono font for precision */
+#grid-major-spacing,
+#grid-minor-spacing {
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+}
+#grid-major-spacing:focus,
+#grid-minor-spacing:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 255, 194, 0.2);
+}
+
+/* ── Feature 54: Snap to Grid active state (already #btn-toggle-snap) ── */
+/* Active state is handled by the shared .btn-icon.active class */
+
+/* ── Feature 55: Snap to Paths & Tangents active state ──────── */
+/* Uses shared .btn-icon.active — no extra styles needed.
+   Visual snap indicator shown on canvas when snapping to a path: */
+.snap-indicator {
+  position: absolute;
+  pointer-events: none;
+  z-index: 40;
+  transition: opacity 0.1s ease;
+}
+.snap-indicator circle {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  animation: snap-pulse 0.25s ease-out;
+}
+.snap-indicator line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  opacity: 0.7;
+}
+@keyframes snap-pulse {
+  from { r: 2; opacity: 1; }
+  to   { r: 8; opacity: 0; }
+}
+
+/* ── Ruler toggle button visual feedback ─────────────────────── */
+#btn-toggle-rulers.active,
+#btn-toggle-path-snap.active,
+#btn-clear-guides:active {
+  color: var(--accent);
+  background: rgba(0, 255, 194, 0.12);
+  box-shadow: inset 0 0 0 1.5px rgba(0, 255, 194, 0.35), 0 0 8px rgba(0, 255, 194, 0.15);
+}
+
+/* ── Light mode overrides for ruler system ───────────────────── */
+html[data-theme="light"] .ruler-origin-box,
+html[data-theme="light"] .ruler.ruler-horizontal,
+html[data-theme="light"] .ruler.ruler-vertical {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+html[data-theme="light"] .ruler.ruler-horizontal:hover {
+  background: linear-gradient(to bottom, var(--bg-hover) 0%, var(--bg-secondary) 100%);
+}
+html[data-theme="light"] .ruler.ruler-vertical:hover {
+  background: linear-gradient(to right, var(--bg-hover) 0%, var(--bg-secondary) 100%);
+}
+html[data-theme="light"] .guideline-layer .guide-line {
+  stroke: rgba(0, 153, 117, 0.55);
+}
+html[data-theme="light"] .guideline-layer .guide-line:hover,
+html[data-theme="light"] .guideline-layer .guide-line.hovered {
+  stroke: var(--accent);
+}
+html[data-theme="light"] .ruler-crosshair {
+  stroke: rgba(0, 153, 117, 0.15);
+}
+html[data-theme="light"] #grid-major-spacing,
+html[data-theme="light"] #grid-minor-spacing {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+
+/* Layer Tree Panel */
+.layer-tree-container::-webkit-scrollbar { width: 4px; }
+.layer-tree-container::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 2px; }
+
+.layer-item {
+  display: flex;
+  align-items: center;
+  padding: 3px 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  gap: 4px;
+  margin-bottom: 1px;
+}
+.layer-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+.layer-item.selected {
+  background: var(--accent);
+  color: #111; /* inverted text for selection */
+}
+.layer-item.selected .layer-icon {
+  color: #111;
+}
+.layer-item-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.layer-icon {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+.layer-expander {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  opacity: 0.5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.layer-expander:hover { opacity: 1; }
+.layer-expander svg { transition: transform 0.15s; }
+.layer-expander.collapsed svg { transform: rotate(-90deg); }
+.layer-children {
+  padding-left: 12px;
+  border-left: 1px dashed rgba(255,255,255,0.1);
+  margin-left: 6px;
+}
+.layer-children.collapsed {
+  display: none;
+}
+.layer-lock {
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  opacity: 0.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.layer-lock:hover { opacity: 0.8; }
+.layer-item[data-locked="true"] .layer-lock {
+  opacity: 1;
+  color: #ff4d4d;
+}
+.layer-color-tag {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ISOLATION MODE */
+.isolation-breadcrumb {
+  position: absolute;
+  top: 10px;
+  left: 30px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 14px;
+  background: rgba(15, 15, 25, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-glow);
+}
+.isolation-text { font-size: 0.75rem; color: var(--text-primary); }
+.isolation-text strong { color: var(--accent); }
+.isolated-backdrop {
+  opacity: 0.3 !important;
+  pointer-events: none !important;
+}
+
+/* ── Accordion Styles ── */
+.prop-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+.prop-section-title:hover {
+  color: var(--accent);
+}
+.prop-section-title .chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+  color: var(--text-muted);
+}
+.prop-section-title:hover .chevron {
+  color: var(--accent);
+}
+.prop-section.collapsed .chevron {
+  transform: rotate(-90deg);
+}
+.prop-section.collapsed > *:not(.prop-section-title) {
+  display: none !important;
 }

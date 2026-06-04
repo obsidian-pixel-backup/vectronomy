@@ -24,6 +24,8 @@ import { StorageManager } from './managers/StorageManager';
 import { ProjectManager } from './managers/ProjectManager';
 import { GridManager } from './managers/GridManager';
 import { ToolbarManager } from './managers/ToolbarManager';
+import { LayerManager } from './engine/layerManager';
+import { PrecisionEngine } from './engine/precision';
 
 const toolbarManager = new ToolbarManager();
 
@@ -95,6 +97,8 @@ let uiManager: UIManager;
 let storageManager: StorageManager;
 let projectManager: ProjectManager;
 let gridManager: GridManager;
+let layerManager: LayerManager;
+let precisionEngine: PrecisionEngine;
 const MAX_HISTORY = 30;
 let suppressPropUpdates = false;
 
@@ -438,38 +442,11 @@ async function processImageFile(file: File, dropCoords?: DOMPoint) {
         y = 100;
       }
       
-      const mainSvg = previewContainer.querySelector('svg');
-      if (mainSvg) {
-        const viewport = mainSvg.querySelector('#viewport') || mainSvg;
-        const imgEl = document.createElementNS('http://www.w3.org/2000/svg', 'image');
-        imgEl.setAttribute('href', dataUrl);
-        imgEl.setAttribute('x', String(x));
-        imgEl.setAttribute('y', String(y));
-        imgEl.setAttribute('width', String(w));
-        imgEl.setAttribute('height', String(h));
-        imgEl.setAttribute('data-xcs-id', `img-${Date.now()}`);
-        viewport.appendChild(imgEl);
-        
-        // Update layer SVG
-        const newSvg = mainSvg.outerHTML;
-        const layer = convertedLayers[activeLayerIndex];
-        if (layer) {
-          layer.svg = newSvg;
-          layer.elementCount++;
-        }
-        pushUndo(newSvg);
-        
-        // Force editor to re-load layer
-        if (editor) {
-          editor.setLayer(layer);
-          // Auto select the newly placed image!
-          editor.selectedId = imgEl.getAttribute('data-xcs-id');
-          editor.selectedIds = new Set([editor.selectedId!]);
-          editor.renderSelectionUI();
-        }
-        
-        showToast(`${file.name} imported successfully!`);
+      if (editor) {
+        editor.insertImage(dataUrl, x, y, w, h);
       }
+        
+      showToast(`${file.name} imported successfully!`);
     };
     img.src = dataUrl;
   };
@@ -685,6 +662,16 @@ function initEditor() {
 
   // Initialize Toolbar Manager
   toolbarManager.init(editor, updateToolOptionsUI);
+  // Initialize Layer and Precision
+  layerManager = new LayerManager(editor);
+  precisionEngine = new PrecisionEngine(document.getElementById('ruler-canvas-wrap') as HTMLElement);
+  precisionEngine.setPanzoomAccessor(() => {
+    if (!panzoom) return { scale: 1, x: 0, y: 0 };
+    const st = panzoom.getPan();
+    return { scale: panzoom.getScale(), x: st.x, y: st.y };
+  });
+  setTimeout(() => layerManager.updateTree(), 100);
+
 
   // ── Array Grid Generator Button Click ─────────────────────────
   const btnCreateArray = document.getElementById('btn-create-array');
@@ -769,6 +756,184 @@ function initEditor() {
   });
 
   // ── Property inputs ───────────────────────────────────────────
+  
+  // ── Popover Toggles ───────────────────────────────────────────
+  const curvesToggle = document.getElementById('tool-curves-toggle');
+  const curvesPopover = document.getElementById('curves-popover');
+  if (curvesToggle && curvesPopover) {
+    curvesToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      curvesPopover.classList.toggle('show');
+      document.getElementById('shapes-popover')?.classList.remove('show');
+    });
+  }
+
+  const shapesToggle = document.getElementById('tool-shapes-toggle');
+  const shapesPopover = document.getElementById('shapes-popover');
+  if (shapesToggle && shapesPopover) {
+    shapesToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      shapesPopover.classList.toggle('show');
+      document.getElementById('curves-popover')?.classList.remove('show');
+    });
+  }
+
+  document.addEventListener('click', () => {
+    curvesPopover?.classList.remove('show');
+    shapesPopover?.classList.remove('show');
+  });
+
+  document.querySelectorAll('.shape-menu-item').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tool = (e.currentTarget as HTMLElement).dataset.tool;
+      if (tool) switchTool(tool);
+      curvesPopover?.classList.remove('show');
+      shapesPopover?.classList.remove('show');
+    });
+  });
+
+  // ── Top Level Toolbar Buttons ─────────────────────────────────
+  document.querySelectorAll('.tool-btn').forEach(btn => {
+    if (btn.id && btn.id.startsWith('tool-') && btn.id !== 'tool-curves-toggle' && btn.id !== 'tool-shapes-toggle') {
+      btn.addEventListener('click', () => {
+        const tool = btn.id.replace('tool-', '');
+        switchTool(tool);
+      });
+    }
+  });
+
+  // ── Text to Path & CNC ────────────────────────────────────────
+  
+  // ── Text to Path & CNC ────────────────────────────────────────
+  const btnConvertToPath = document.getElementById('btn-convert-to-path');
+  if (btnConvertToPath) {
+    btnConvertToPath.addEventListener('click', async () => {
+      await editor?.convertSelectedToPath();
+      if (typeof showToast !== 'undefined') showToast('Converted to path!');
+    });
+  }
+  
+  
+  // CNC & Pathfinder Bindings
+  document.getElementById('btn-path-divide')?.addEventListener('click', async () => {
+    if (typeof showToast !== 'undefined') showToast('Dividing Overlaps...');
+    await editor?.pathfinderOperation('divide');
+  });
+  
+  document.getElementById('btn-path-flatten')?.addEventListener('click', () => {
+    const tol = parseFloat((document.getElementById('prop-flatten-tol') as HTMLInputElement)?.value || '0.25');
+    editor?.flattenSelectedPaths(tol);
+    if (typeof showToast !== 'undefined') showToast('Paths flattened');
+  });
+
+  document.getElementById('btn-path-reverse')?.addEventListener('click', () => {
+    editor?.reverseSelectedPaths();
+    if (typeof showToast !== 'undefined') showToast('Path direction reversed');
+  });
+
+  document.getElementById('btn-mill-pocket')?.addEventListener('click', () => {
+    const step = parseFloat((document.getElementById('prop-mill-stepover') as HTMLInputElement)?.value || '40');
+    const angle = parseFloat((document.getElementById('prop-mill-angle') as HTMLInputElement)?.value || '45');
+    editor?.applyPocketHatch(step, angle);
+    if (typeof showToast !== 'undefined') showToast('Pocket hatch applied');
+  });
+
+  document.getElementById('btn-mill-chamfer')?.addEventListener('click', () => {
+    const depth = parseFloat((document.getElementById('prop-mill-depth') as HTMLInputElement)?.value || '5');
+    const angle = parseFloat((document.getElementById('prop-mill-vangle') as HTMLInputElement)?.value || '90');
+    editor?.applyChamfer(depth, angle, 1);
+    if (typeof showToast !== 'undefined') showToast('Chamfer applied');
+  });
+
+  document.getElementById('btn-mill-drill')?.addEventListener('click', () => {
+    const dia = parseFloat((document.getElementById('prop-mill-drilldia') as HTMLInputElement)?.value || '6');
+    editor?.convertToDrill(dia);
+    if (typeof showToast !== 'undefined') showToast('Converted to drills');
+  });
+
+  document.getElementById('btn-mill-tabs')?.addEventListener('click', () => {
+    const count = parseFloat((document.getElementById('prop-mill-tabcount') as HTMLInputElement)?.value || '4');
+    const width = parseFloat((document.getElementById('prop-mill-tabwidth') as HTMLInputElement)?.value || '3');
+    editor?.applyMillingHoldingTabs(count, width, 1.5);
+    if (typeof showToast !== 'undefined') showToast('Holding tabs generated');
+  });
+
+  document.getElementById('btn-mill-concentric')?.addEventListener('click', () => {
+    const step = parseFloat((document.getElementById('prop-mill-stepover') as HTMLInputElement)?.value || '40');
+    editor?.applyConcentricHatch(step);
+    if (typeof showToast !== 'undefined') showToast('Concentric hatch applied');
+  });
+
+  
+  // Pathfinder Boolean Bindings
+  document.getElementById('path-unite')?.addEventListener('click', async () => {
+    if (typeof showToast !== 'undefined') showToast('Uniting paths...');
+    await editor?.pathfinderOperation('unite');
+  });
+  document.getElementById('path-subtract')?.addEventListener('click', async () => {
+    if (typeof showToast !== 'undefined') showToast('Subtracting front path...');
+    await editor?.pathfinderOperation('subtract');
+  });
+  document.getElementById('path-intersect')?.addEventListener('click', async () => {
+    if (typeof showToast !== 'undefined') showToast('Intersecting paths...');
+    await editor?.pathfinderOperation('intersect');
+  });
+  document.getElementById('path-exclude')?.addEventListener('click', async () => {
+    if (typeof showToast !== 'undefined') showToast('Excluding overlap...');
+    await editor?.pathfinderOperation('exclude');
+  });
+
+  const btnGenerateToolpath = document.getElementById('btn-generate-toolpath');
+  if (btnGenerateToolpath) {
+    btnGenerateToolpath.addEventListener('click', () => {
+      const kerfInput = document.getElementById('prop-kerf-width') as HTMLInputElement;
+      const kerf = kerfInput ? parseFloat(kerfInput.value) : 0;
+      if (kerf !== 0) {
+         editor?.applyKerf(kerf);
+         if (typeof showToast !== 'undefined') showToast('Kerf offset applied!');
+      } else {
+         if (typeof showToast !== 'undefined') showToast('Please set a kerf width > 0.');
+      }
+    });
+  }
+
+  // ── Auto-Tracing UI ───────────────────────────────────────────
+  const btnTraceSilhouette = document.getElementById('btn-trace-silhouette');
+  if (btnTraceSilhouette) {
+     btnTraceSilhouette.addEventListener('click', async () => {
+        if (typeof showToast !== 'undefined') showToast('Tracing Silhouette...');
+        const contrastInput = document.getElementById('prop-contrast') as HTMLInputElement;
+        const val = contrastInput ? parseFloat(contrastInput.value) : 0;
+        await editor?.traceSilhouette(128 + val);
+     });
+  }
+
+  const btnTraceCenterline = document.getElementById('btn-trace-centerline');
+  if (btnTraceCenterline) {
+     btnTraceCenterline.addEventListener('click', async () => {
+        if (typeof showToast !== 'undefined') showToast('Extracting Centerlines...');
+        await editor?.traceCenterline();
+     });
+  }
+
+  const btnTraceEdges = document.getElementById('btn-trace-edges');
+  if (btnTraceEdges) {
+     btnTraceEdges.addEventListener('click', async () => {
+        if (typeof showToast !== 'undefined') showToast('Running High-Pass Edge Detection...');
+        await editor?.traceEdges(100);
+     });
+  }
+
+  const btnTracePosterize = document.getElementById('btn-trace-posterize');
+  if (btnTracePosterize) {
+     btnTracePosterize.addEventListener('click', async () => {
+        if (typeof showToast !== 'undefined') showToast('Multi-color Posterizing...');
+        await editor?.tracePosterized(4);
+     });
+  }
+
+  // ── Property inputs ───────────────────────────────────────────
   bindPropInputs();
 }
 
@@ -848,14 +1013,25 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
   const viewport = svgEl?.querySelector('#viewport') as SVGGElement | null;
   if (!svgEl || !viewport) return;
 
+  if (!fitToView && startX === 0 && startY === 0) {
+    const W = previewContainer.clientWidth || 0;
+    const H = previewContainer.clientHeight || 0;
+    startX = (W / 2) / startScale;
+    startY = (H / 2) / startScale;
+  }
+
   panzoom = Panzoom(svgEl, {
     maxScale: 10000, minScale: 0.0001, step: 0.12,
     startScale, startX, startY,
     disablePan: currentDisablePan,
     setTransform: (elem, { scale, x, y }) => {
-      // Apply the transform to the viewport group, not the svg itself
       if (viewport) {
-        viewport.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${x * scale}, ${y * scale})`);
+        const W = previewContainer.clientWidth || 0;
+        const H = previewContainer.clientHeight || 0;
+        viewport.setAttribute('transform', `matrix(${scale}, 0, 0, ${scale}, ${x * scale + W / 2}, ${y * scale + H / 2})`);
+        if (typeof precisionEngine !== 'undefined' && precisionEngine) {
+          precisionEngine.onViewportChange();
+        }
       }
     },
     handleStartEvent: (e: any) => {
@@ -910,31 +1086,22 @@ function initPanzoom(fitToView = false, startScale = 1, startX = 0, startY = 0) 
     const newY = newTy / newScale;
 
     // Set scale and pan in a single layout frame to prevent jitter
-    panzoom.zoom(newScale, { animate: false });
-    panzoom.pan(newX, newY, { animate: false });
-    updateZoomDisplay();
-  }, { passive: false });
-
-  svgEl.addEventListener('panzoomchange', updateZoomDisplay);
-
-  if (fitToView) {
-    // Delay to ensure SVG is rendered
     requestAnimationFrame(() => {
-      fitSvgToView(svgEl);
+      panzoom?.zoom(newScale, { animate: false });
+      panzoom?.pan(newX, newY, { animate: false });
+      updateZoomDisplay();
     });
-  } else {
-    updateZoomDisplay();
-  }
+  }, { passive: false });
 }
 
-function fitSvgToView(svgEl: SVGSVGElement) {
+export function fitSvgToView(svgEl: SVGSVGElement) {
   if (!panzoom) return;
   const viewport = svgEl.querySelector('#viewport') as SVGGElement | null;
   if (!viewport) return;
 
-  const container = svgEl.parentElement!;
-  const cW = container.clientWidth;
-  const cH = container.clientHeight;
+  const rect = previewContainer.getBoundingClientRect();
+  const cW = rect.width;
+  const cH = rect.height;
 
   if (cW === 0 || cH === 0) {
     // Layout hasn't occurred yet, retry next frame
@@ -995,6 +1162,16 @@ function updateZoomDisplay() {
 // ── Zoom Controls ─────────────────────────────────────────────────
 
 document.getElementById('btn-zoom-in')!.addEventListener('click', () => { panzoom?.zoomIn(); updateZoomDisplay(); });
+
+document.getElementById('btn-collapse-controls')?.addEventListener('click', () => {
+  document.getElementById('preview-controls')?.classList.toggle('collapsed');
+  setTimeout(() => fitSvgToView(previewContainer.querySelector('svg') as SVGSVGElement), 310);
+});
+
+document.getElementById('btn-toggle-rulers')?.addEventListener('click', () => {
+  document.getElementById('ruler-canvas-wrap')?.classList.toggle('hide-rulers');
+  setTimeout(() => fitSvgToView(previewContainer.querySelector('svg') as SVGSVGElement), 10);
+});
 document.getElementById('btn-zoom-out')!.addEventListener('click', () => { panzoom?.zoomOut(); updateZoomDisplay(); });
 document.getElementById('btn-zoom-fit')!.addEventListener('click', () => {
   const svgEl = previewContainer.querySelector('svg') as SVGSVGElement | null;
@@ -1372,6 +1549,15 @@ function bindPropInputs() {
   });
 
   // Keep hex text fields in sync with color pickers and vice-versa
+  
+  const propTextContent = document.getElementById('prop-text-content') as HTMLTextAreaElement;
+  if (propTextContent) {
+    propTextContent.addEventListener('input', () => {
+      if (suppressPropUpdates) return;
+      editor?.updateProperties({ textContent: propTextContent.value });
+    });
+  }
+
   propStrokeColor.addEventListener('input', () => { propStrokeHex.value = propStrokeColor.value; });
   propStrokeHex.addEventListener('input', () => {
     if (/^#[0-9a-f]{6}$/i.test(propStrokeHex.value)) propStrokeColor.value = propStrokeHex.value;

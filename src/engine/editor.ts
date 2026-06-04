@@ -8,6 +8,9 @@
 import type { ConvertedLayer } from './types';
 import { parseSvgPath, absolutizePath, stringifySvgPath, extractNodes, PathCommand, PathNodeRef } from './pathUtils';
 import { RasterEngine } from './rasterEngine';
+import { FabricationEngine } from './fabrication';
+import { MillingEngine } from './milling';
+import { TracingEngine } from './tracing';
 import { Pathfinder, BooleanOp } from './pathfinder';
 import { LayoutEngine } from './layoutEngine';
 
@@ -28,6 +31,14 @@ export interface ElementProperties {
   fillOpacity: number;
   fillRule: string;
   elementType: string;
+  textContent?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  fontStyle?: string;
+  letterSpacing?: number;
+  wordSpacing?: number;
+  textAnchor?: string;
 }
 
 export interface PenPoint {
@@ -51,6 +62,51 @@ export class VectorEditor {
 
   private onUpdate: (svg: string) => void;
   private onSelectionChange: (props: ElementProperties | null) => void;
+  public isolatedGroupId: string | null = null;
+  
+  public enterIsolation(groupId: string) {
+    const group = (this.container.querySelector('#viewport') || this.container.querySelector('svg'))?.querySelector(`[data-xcs-id="${groupId}"]`);
+    if (!group) return;
+    this.isolatedGroupId = groupId;
+    
+    // Dim everything else
+    Array.from((this.container.querySelector('#viewport') || this.container.querySelector('svg'))?.children || []).forEach((child: any) => {
+      if (child.id !== 'selection-overlay' && child !== group) {
+        child.classList.add('isolated-backdrop');
+      }
+    });
+
+    const breadcrumb = document.getElementById('isolation-breadcrumb');
+    if (breadcrumb) {
+      breadcrumb.hidden = false;
+      const targetName = document.getElementById('isolation-target-name');
+      if (targetName) targetName.innerText = (group.getAttribute('data-name') || 'Group ' + groupId.substring(0, 8));
+    }
+    
+    const btnExit = document.getElementById('btn-exit-isolation');
+    if (btnExit) {
+      btnExit.onclick = () => this.exitIsolation();
+    }
+    
+    this.clearSelection();
+    this.renderSelectionUI();
+  }
+
+  public exitIsolation() {
+    this.isolatedGroupId = null;
+    
+    // Restore opacity
+    Array.from((this.container.querySelector('#viewport') || this.container.querySelector('svg'))?.children || []).forEach((child: any) => {
+      child.classList.remove('isolated-backdrop');
+    });
+
+    const breadcrumb = document.getElementById('isolation-breadcrumb');
+    if (breadcrumb) breadcrumb.hidden = true;
+    
+    this.clearSelection();
+    this.renderSelectionUI();
+  }
+
   private onInteractionStart: () => void;
   private onInteractionEnd: () => void;
 
@@ -65,14 +121,15 @@ export class VectorEditor {
   private dragStartX = 0;
   private dragStartY = 0;
   private origBBox: DOMRect | null = null;
-  private activeNodeIndex: number | null = null;
+  public selectedNodeIndices: Set<number> = new Set();
   private parsedCommands: PathCommand[] = [];
   private editingNodes: PathNodeRef[] = [];
   private draggingNode: boolean = false;
   private nodeEditTarget: SVGPathElement | null = null;
+  private lastSnappedPt: DOMPoint | null = null;
 
   // Drawing state
-  activeTool: 'select' | 'pan' | 'rect' | 'circle' | 'line' | 'pen' | 'node' | 'polygon' | 'star' | 'spiral' | 'pencil' | 'polyline' | 'brush' | 'eraser' | 'magic-wand' | 'frame' = 'select';
+  activeTool: 'select' | 'pan' | 'rect' | 'circle' | 'line' | 'pen' | 'node' | 'polygon' | 'star' | 'spiral' | 'pencil' | 'polyline' | 'brush' | 'eraser' | 'magic-wand' | 'frame' | 'scissors' | 'text' = 'select';
   private isDrawing = false;
   private drawingEl: SVGElement | null = null;
   private drawStartX = 0;
@@ -80,6 +137,7 @@ export class VectorEditor {
   private penPoints: PenPoint[] = [];
   private penDraggingPoint: PenPoint | null = null;
   public rasterEngine: RasterEngine = new RasterEngine();
+  public handleSnapEnabled: boolean = false;
 
   // Custom Shapes state
   polygonSides = 5;
@@ -100,6 +158,10 @@ export class VectorEditor {
   public setSnapFunction(fn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null) {
     this.snapFn = fn;
   }
+
+  // Feature 56 & 60 properties
+  public centroidSnapEnabled: boolean = false;
+  public transformPivot: 'tl'|'tc'|'tr'|'cl'|'cc'|'cr'|'bl'|'bc'|'br' = 'cc';
 
   constructor(
     container: HTMLElement,
@@ -211,6 +273,26 @@ export class VectorEditor {
     if (e.key === 'Alt') this.altPressed = false;
   }
 
+  public getContainer(): HTMLElement {
+    return this.container;
+  }
+
+  public selectAll() {
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+    if (!viewport) return;
+    const els = Array.from(viewport.querySelectorAll('[data-xcs-id]'));
+    this.selectedIds = new Set(els.map(el => el.getAttribute('data-xcs-id')!));
+    if (this.selectedIds.size === 1) {
+      this.selectedId = els[0].getAttribute('data-xcs-id');
+      this.onSelectionChange(this.getElementProperties(this.selectedId));
+    } else if (this.selectedIds.size > 1) {
+      this.selectedId = null;
+      this.onSelectionChange(this.getMultiSelectionProperties());
+    }
+    this.renderSelectionUI();
+  }
+
   setLayer(layer: ConvertedLayer) { this.currentLayer = layer; this.clearSelection(); }
 
   setTool(tool: typeof this.activeTool) {
@@ -243,7 +325,52 @@ export class VectorEditor {
 
   // ── Universal Studio Features ─────────────────────────────────────
   
+  public async pathfinderDivide() {
+    const els = this.getSelectedEls();
+    if (els.length < 2) return;
+    
+    const svgs = els.map(el => el.outerHTML);
+    const resultSvgString = await Pathfinder.divideAll(svgs);
+    if (!resultSvgString) return;
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(resultSvgString, 'image/svg+xml');
+    const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
+    
+    if (newPaths.length > 0) {
+      const parent = els[0].parentNode;
+      if (!parent) return;
+      
+      const fragment = document.createDocumentFragment();
+      newPaths.forEach((np, i) => {
+        // Just keep the attributes from the pathfinder (d), and assign new ID
+        np.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+        
+        // Copy styling from the first element as fallback, although PaperJS might retain some
+        const ignoredAttrs = ['d', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'points', 'data-xcs-id', 'transform'];
+        Array.from(els[0].attributes).forEach(attr => {
+          if (!ignoredAttrs.includes(attr.name)) {
+            if (!np.hasAttribute(attr.name)) {
+                np.setAttribute(attr.name, attr.value);
+            }
+          }
+        });
+        
+        fragment.appendChild(np);
+      });
+      
+      parent.insertBefore(fragment, els[0]);
+      els.forEach(el => el.remove());
+      
+      this.clearSelection();
+      this.commit();
+    }
+  }
+
   public async pathfinderOperation(operation: BooleanOp) {
+    if (operation === 'divide') {
+      return this.pathfinderDivide();
+    }
     const els = this.getSelectedEls();
     if (els.length < 2) return; // Need at least two shapes
     
@@ -311,6 +438,640 @@ export class VectorEditor {
     this.commit();
   }
   
+  public togglePathClosed() {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    let changed = false;
+    for (const el of els) {
+      if (el.tagName.toLowerCase() !== 'path') continue;
+      const d = el.getAttribute('d');
+      if (!d) continue;
+      const cmds = parseSvgPath(d);
+      if (cmds.length === 0) continue;
+      const isClosed = cmds[cmds.length - 1].type.toUpperCase() === 'Z';
+      if (isClosed) {
+        cmds.pop();
+      } else {
+        cmds.push({ type: 'Z', args: [] });
+      }
+      el.setAttribute('d', stringifySvgPath(cmds));
+      changed = true;
+    }
+    if (changed) {
+      this.renderSelectionUI();
+      this.commit();
+    }
+  }
+
+  public strokeToPath() {
+    this.processPathfinderUtility(
+      (svg: string, el: SVGElement) => {
+        let width = parseFloat(el.getAttribute('stroke-width') || '1');
+        let cap = el.getAttribute('stroke-linecap') || 'round';
+        let join = el.getAttribute('stroke-linejoin') || 'round';
+        return Pathfinder.outlineStroke(svg, width, cap, join);
+      },
+      (np: SVGElement, oldEl: SVGElement) => {
+        const strokeColor = oldEl.getAttribute('stroke') || '#000000';
+        np.setAttribute('fill', strokeColor);
+        np.removeAttribute('stroke');
+        np.removeAttribute('stroke-width');
+        np.removeAttribute('stroke-linecap');
+        np.removeAttribute('stroke-linejoin');
+      }
+    );
+  }
+
+  public offsetSelectedPaths(offset: number) {
+    this.processPathfinderUtility((svg: string) => Pathfinder.offsetPath(svg, offset, 'round'));
+  }
+
+  
+
+  public flattenSelectedPaths(tolerance: number) {
+    this.processPathfinderUtility((svg: string) => Pathfinder.flattenPath(svg, tolerance));
+  }
+
+  public reverseSelectedPaths() {
+    this.processPathfinderUtility((svg: string) => Pathfinder.reversePath(svg));
+  }
+
+  private processPathfinderUtility(processor: (svg: string, el: SVGElement) => string | null, styleCallback?: (np: SVGElement, oldEl: SVGElement) => void) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    let changed = false;
+    for (const el of els) {
+        const resultStr = processor(el.outerHTML, el);
+        if (!resultStr) continue;
+        
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(resultStr, 'image/svg+xml');
+        const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
+        
+        if (newPaths.length > 0) {
+            const parent = el.parentNode;
+            if (!parent) continue;
+            
+            const fragment = document.createDocumentFragment();
+            newPaths.forEach((np, i) => {
+                const isCompound = newPaths.length === 1;
+                if (isCompound && el.hasAttribute('data-xcs-id')) {
+                    np.setAttribute('data-xcs-id', el.getAttribute('data-xcs-id')!);
+                } else {
+                    np.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+                }
+                
+                const ignoredAttrs = ['d', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'points', 'data-xcs-id', 'transform'];
+                Array.from(el.attributes).forEach(attr => {
+                    if (!ignoredAttrs.includes(attr.name)) {
+                        if (!np.hasAttribute(attr.name)) {
+                            np.setAttribute(attr.name, attr.value);
+                        }
+                    }
+                });
+                
+                if (styleCallback) {
+                    styleCallback(np, el);
+                }
+                
+                fragment.appendChild(np);
+            });
+            
+            parent.insertBefore(fragment, el);
+            el.remove();
+            changed = true;
+        }
+    }
+    
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public applyKerf(kerfWidth: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    const svgs = els.map(el => el.outerHTML);
+    const resultSvgs = FabricationEngine.applyKerfCompensation(svgs, kerfWidth);
+    
+    let changed = false;
+    for (let i = 0; i < els.length; i++) {
+        if (resultSvgs[i] !== svgs[i]) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(resultSvgs[i], 'image/svg+xml');
+            const newPath = doc.documentElement.firstElementChild as SVGElement;
+            if (newPath) {
+                Array.from(els[i].attributes).forEach(attr => {
+                    if (attr.name !== 'd' && !newPath.hasAttribute(attr.name)) {
+                        newPath.setAttribute(attr.name, attr.value);
+                    }
+                });
+                els[i].replaceWith(newPath);
+                changed = true;
+            }
+        }
+    }
+    
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public applyLeadInOut(length: number, type: 'in' | 'out' | 'both') {
+    this.processPathfinderUtility((svg: string) => FabricationEngine.addLeadInOut(svg, length, type));
+  }
+
+  public applyMicroJoints(count: number, width: number) {
+    this.processPathfinderUtility((svg: string) => FabricationEngine.addTabs(svg, count, width));
+  }
+
+  // ── Batch 5 Features ──────────────────────────────────────────
+
+  public applyAcrylicOvercut(length: number) {
+    this.processPathfinderUtility((svg: string) => FabricationEngine.addOvercut(svg, length));
+  }
+
+  public applyPowerRamping(thresholdDeg: number = 60) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    let changed = false;
+    for (const el of els) {
+        const resultSvgs = FabricationEngine.applyPowerRamping(el.outerHTML, thresholdDeg);
+        if (resultSvgs.length <= 1) continue;
+        
+        const parent = el.parentNode;
+        if (!parent) continue;
+        
+        const fragment = document.createDocumentFragment();
+        resultSvgs.forEach(svgStr => {
+            const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
+            const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
+            newPaths.forEach(np => {
+                np.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+                const ignoredAttrs = ['d', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'points', 'data-xcs-id', 'transform', 'stroke'];
+                Array.from(el.attributes).forEach(attr => {
+                    if (!ignoredAttrs.includes(attr.name) && !np.hasAttribute(attr.name)) {
+                        np.setAttribute(attr.name, attr.value);
+                    }
+                });
+                fragment.appendChild(np);
+            });
+        });
+        
+        parent.insertBefore(fragment, el);
+        el.remove();
+        changed = true;
+    }
+    
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public applyPerforations(dashLen: number, gapLen: number) {
+    this.processPathfinderUtility((svg: string) => FabricationEngine.addPerforations(svg, dashLen, gapLen));
+  }
+
+  public mapColorsToOps(mapping: { color: string, mode: string }[]) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    let changed = false;
+    
+    const normalizeColor = (c: string) => c.toLowerCase().replace(/\s/g, '');
+    
+    for (const el of els) {
+        const stroke = normalizeColor(el.getAttribute('stroke') || '');
+        const fill = normalizeColor(el.getAttribute('fill') || '');
+        
+        for (const rule of mapping) {
+            const rColor = normalizeColor(rule.color);
+            if ((stroke && stroke === rColor) || (fill && fill === rColor)) {
+                el.setAttribute('data-laser-op', rule.mode);
+                changed = true;
+                break;
+            }
+        }
+    }
+    if (changed) this.commit();
+  }
+
+  public applyMultiPass(passes: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || passes <= 1) return;
+    
+    let changed = false;
+    for (const el of els) {
+        el.setAttribute('data-laser-passes', passes.toString());
+        changed = true;
+    }
+    if (changed) this.commit();
+  }
+
+  public async optimizeCutOrder() {
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+    if (!viewport) return;
+    
+    const els = Array.from(viewport.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGGraphicsElement[];
+    if (els.length < 2) return;
+    
+    const svgs = els.map(el => el.outerHTML);
+    const { originalIndices } = await FabricationEngine.sortAndRouteCuts(svgs);
+    
+    // Re-append elements in the newly sorted order
+    originalIndices.forEach(idx => {
+        viewport.appendChild(els[idx]);
+    });
+    
+    this.commit();
+  }
+
+  // ── Batch 6 Features (CNC) ────────────────────────────────────
+
+  public applyCncBitOffset(bitRadius: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || bitRadius === 0) return;
+    const svgs = els.map(el => el.outerHTML);
+    const resultSvgs = MillingEngine.applyBitOffset(svgs, bitRadius);
+    
+    let changed = false;
+    for (let i = 0; i < els.length; i++) {
+        if (resultSvgs[i] !== svgs[i]) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(resultSvgs[i], 'image/svg+xml');
+            const newPath = doc.documentElement.firstElementChild as SVGElement;
+            if (newPath) {
+                Array.from(els[i].attributes).forEach(attr => {
+                    if (attr.name !== 'd' && !newPath.hasAttribute(attr.name)) {
+                        newPath.setAttribute(attr.name, attr.value);
+                    }
+                });
+                els[i].replaceWith(newPath);
+                changed = true;
+            }
+        }
+    }
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public applyPocketHatch(stepover: number, angleDeg: number) {
+    this.processPathfinderUtility((svg: string) => MillingEngine.generatePocketHatch(svg, stepover, angleDeg));
+  }
+
+  public applyChamfer(depth: number, angleDeg: number, passes: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    let changed = false;
+    for (const el of els) {
+        const resultSvgs = MillingEngine.generateChamfer(el.outerHTML, depth, angleDeg, passes);
+        if (resultSvgs.length === 0) continue;
+        
+        const parent = el.parentNode;
+        if (!parent) continue;
+        
+        const fragment = document.createDocumentFragment();
+        resultSvgs.forEach(svgStr => {
+            const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
+            const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
+            newPaths.forEach(np => {
+                np.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+                const ignoredAttrs = ['d', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'points', 'data-xcs-id', 'transform', 'stroke', 'fill', 'data-cnc-op', 'data-cnc-z'];
+                Array.from(el.attributes).forEach(attr => {
+                    if (!ignoredAttrs.includes(attr.name) && !np.hasAttribute(attr.name)) {
+                        np.setAttribute(attr.name, attr.value);
+                    }
+                });
+                fragment.appendChild(np);
+            });
+        });
+        
+        parent.insertBefore(fragment, el.nextSibling); // Append chamfers after the main outline
+        changed = true;
+    }
+    
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public convertToDrill(maxDiameter: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    const svgs = els.map(el => el.outerHTML);
+    const { svgs: resultSvgs, changed: changedFlags } = MillingEngine.convertToDrill(svgs, maxDiameter);
+    
+    let changed = false;
+    for (let i = 0; i < els.length; i++) {
+        if (changedFlags[i]) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(resultSvgs[i], 'image/svg+xml');
+            const newEl = doc.documentElement.firstElementChild as SVGElement;
+            if (newEl) {
+                newEl.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+                els[i].replaceWith(newEl);
+                changed = true;
+            }
+        }
+    }
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public applyVCarve(bitAngle: number) {
+    this.processPathfinderUtility((svg: string) => MillingEngine.applyVCarve(svg, bitAngle));
+  }
+
+  // ── Batch 7 Features (Final CNC) ──────────────────────────────
+
+  public applyMillingHoldingTabs(tabCount: number, tabWidth: number, tabThickness: number) {
+    this.processPathfinderUtility((svg: string) => MillingEngine.addHoldingTabs(svg, tabCount, tabWidth, tabThickness));
+  }
+
+  public applyConcentricHatch(stepover: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    let changed = false;
+    for (const el of els) {
+        const resultSvgs = MillingEngine.generateConcentricHatch(el.outerHTML, stepover);
+        if (resultSvgs.length === 0) continue;
+        
+        const parent = el.parentNode;
+        if (!parent) continue;
+        
+        const fragment = document.createDocumentFragment();
+        resultSvgs.forEach(svgStr => {
+            const doc = new DOMParser().parseFromString(svgStr, 'image/svg+xml');
+            const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
+            newPaths.forEach(np => {
+                np.setAttribute('data-xcs-id', `pf-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+                const ignoredAttrs = ['d', 'x', 'y', 'width', 'height', 'cx', 'cy', 'r', 'rx', 'ry', 'points', 'data-xcs-id', 'transform', 'stroke', 'fill', 'data-cnc-op', 'data-cnc-z'];
+                Array.from(el.attributes).forEach(attr => {
+                    if (!ignoredAttrs.includes(attr.name) && !np.hasAttribute(attr.name)) {
+                        np.setAttribute(attr.name, attr.value);
+                    }
+                });
+                fragment.appendChild(np);
+            });
+        });
+        
+        parent.insertBefore(fragment, el.nextSibling); // Append hatch lines inside/after
+        changed = true;
+    }
+    
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
+
+  public applyFeedPlungeRates(feedXY: number, plungeZ: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    let changed = false;
+    for (const el of els) {
+        if (feedXY > 0) el.setAttribute('data-cnc-feedrate', feedXY.toString());
+        if (plungeZ > 0) el.setAttribute('data-cnc-plungerate', plungeZ.toString());
+        changed = true;
+    }
+    if (changed) this.commit();
+  }
+
+  public applyStepoverOverlapConfig(overlapPercent: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    let changed = false;
+    for (const el of els) {
+        if (overlapPercent >= 0 && overlapPercent <= 100) {
+            el.setAttribute('data-cnc-stepover-pct', overlapPercent.toString());
+            changed = true;
+        }
+    }
+    if (changed) this.commit();
+  }
+
+  public applySafeRetractZ(retractZ: number) {
+    // Retract Z is usually a global setting, but can be configured per path
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    let changed = false;
+    for (const el of els) {
+        el.setAttribute('data-cnc-safe-z', retractZ.toString());
+        changed = true;
+    }
+    if (changed) this.commit();
+  }
+
+  // ── Batch 8 Features (Tracing) ────────────────────────────────
+
+  public async traceCenterline(cornerThreshold: number = 1.5) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || els[0].tagName.toLowerCase() !== 'image') return;
+    const href = els[0].getAttribute('href');
+    if (!href) return;
+    
+    const imgData = await TracingEngine.getImageData(href);
+    const resultSvg = await TracingEngine.traceCenterline(imgData, cornerThreshold);
+    this.replaceImageWithVectors(els[0], resultSvg);
+  }
+
+  public async traceSilhouette(threshold: number, cornerThreshold: number = 1.5) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || els[0].tagName.toLowerCase() !== 'image') return;
+    const href = els[0].getAttribute('href');
+    if (!href) return;
+    
+    const imgData = await TracingEngine.getImageData(href);
+    const resultSvg = await TracingEngine.traceSilhouette(imgData, threshold, cornerThreshold);
+    this.replaceImageWithVectors(els[0], resultSvg);
+  }
+
+  public async tracePosterized(colors: number, cornerThreshold: number = 1.5) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || els[0].tagName.toLowerCase() !== 'image') return;
+    const href = els[0].getAttribute('href');
+    if (!href) return;
+    
+    const imgData = await TracingEngine.getImageData(href);
+    const resultSvg = await TracingEngine.tracePosterized(imgData, colors, cornerThreshold);
+    this.replaceImageWithVectors(els[0], resultSvg);
+  }
+
+  public async traceEdges(threshold: number, cornerThreshold: number = 1.5) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || els[0].tagName.toLowerCase() !== 'image') return;
+    const href = els[0].getAttribute('href');
+    if (!href) return;
+    
+    const imgData = await TracingEngine.getImageData(href);
+    const resultSvg = await TracingEngine.traceEdges(imgData, threshold, cornerThreshold);
+    this.replaceImageWithVectors(els[0], resultSvg);
+  }
+
+  public async traceColorIsolation(colorHex: string, tolerance: number = 30, cornerThreshold: number = 1.5) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || els[0].tagName.toLowerCase() !== 'image') return;
+    const href = els[0].getAttribute('href');
+    if (!href) return;
+    
+    const imgData = await TracingEngine.getImageData(href);
+    const resultSvg = await TracingEngine.traceColorIsolation(imgData, colorHex, tolerance, cornerThreshold);
+    this.replaceImageWithVectors(els[0], resultSvg);
+  }
+
+  public async applyHalftone(spacing: number, angle: number) {
+    const els = this.getSelectedEls();
+    if (els.length === 0 || els[0].tagName.toLowerCase() !== 'image') return;
+    const href = els[0].getAttribute('href');
+    if (!href) return;
+    
+    const imgData = await TracingEngine.getImageData(href);
+    const resultSvg = await TracingEngine.traceHalftone(imgData, spacing, angle);
+    this.replaceImageWithVectors(els[0], resultSvg);
+  }
+
+  public applyDespeckle(minArea: number) {
+    this.processPathfinderUtility((svg: string) => TracingEngine.despeckle(svg, minArea));
+  }
+
+  private replaceImageWithVectors(imgEl: Element, newSvgStr: string) {
+    const doc = new DOMParser().parseFromString(newSvgStr, 'image/svg+xml');
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line, g'));
+    
+    newPaths.forEach(np => {
+      if (np.tagName.toLowerCase() !== 'svg') {
+        np.setAttribute('data-xcs-id', `trace-${Date.now()}-${Math.floor(Math.random() * 10000)}`);
+        group.appendChild(np);
+      }
+    });
+
+    const parent = imgEl.parentNode;
+    if (parent) {
+      // apply image transforms to the group
+      const transform = imgEl.getAttribute('transform');
+      if (transform) group.setAttribute('transform', transform);
+      
+      const x = parseFloat(imgEl.getAttribute('x') || '0');
+      const y = parseFloat(imgEl.getAttribute('y') || '0');
+      if (x !== 0 || y !== 0) {
+         group.setAttribute('transform', (group.getAttribute('transform') || '') + ` translate(${x}, ${y})`);
+      }
+      
+      parent.insertBefore(group, imgEl);
+      imgEl.remove();
+      this.clearSelection();
+      this.commit();
+    }
+  }
+
+  public joinOpenEndpoints(threshold: number = 5) {
+    const els = this.getSelectedEls();
+    const paths = els.filter(el => el.tagName.toLowerCase() === 'path');
+    if (paths.length < 2) return;
+    
+    interface PathInfo {
+      el: SVGElement;
+      cmds: PathCommand[];
+      start: { x: number, y: number };
+      end: { x: number, y: number };
+      merged: boolean;
+    }
+    
+    const pathInfos: PathInfo[] = [];
+    const scale = this.getScale();
+    const actualThreshold = threshold / scale;
+
+    for (const el of paths) {
+      const d = el.getAttribute('d');
+      if (!d) continue;
+      const cmds = absolutizePath(parseSvgPath(d));
+      if (cmds.length < 2) continue;
+      const isClosed = cmds[cmds.length - 1].type.toUpperCase() === 'Z';
+      if (isClosed) continue;
+      
+      const nodes = extractNodes(cmds);
+      if (nodes.length < 2) continue;
+      
+      pathInfos.push({
+        el,
+        cmds,
+        start: { x: nodes[0].x, y: nodes[0].y },
+        end: { x: nodes[nodes.length - 1].x, y: nodes[nodes.length - 1].y },
+        merged: false
+      });
+    }
+
+    let mergedAny = false;
+    for (let i = 0; i < pathInfos.length; i++) {
+      if (pathInfos[i].merged) continue;
+      let p1 = pathInfos[i];
+      let keepChecking = true;
+      while (keepChecking) {
+        keepChecking = false;
+        for (let j = 0; j < pathInfos.length; j++) {
+          if (i === j || pathInfos[j].merged) continue;
+          let p2 = pathInfos[j];
+          
+          const distEndToStart = Math.hypot(p1.end.x - p2.start.x, p1.end.y - p2.start.y);
+          if (distEndToStart <= actualThreshold) {
+            const p2Cmds = [...p2.cmds];
+            p2Cmds[0].type = 'L';
+            p1.cmds.push(...p2Cmds);
+            p1.end = p2.end;
+            p2.merged = true;
+            keepChecking = true;
+            mergedAny = true;
+            break;
+          }
+          
+          const distStartToEnd = Math.hypot(p2.end.x - p1.start.x, p2.end.y - p1.start.y);
+          if (distStartToEnd <= actualThreshold) {
+            const p1Cmds = [...p1.cmds];
+            p1Cmds[0].type = 'L';
+            p1.cmds = [...p2.cmds, ...p1Cmds];
+            p1.start = p2.start;
+            p2.merged = true;
+            keepChecking = true;
+            mergedAny = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (mergedAny) {
+      pathInfos.forEach(p => {
+        if (p.merged) {
+          p.el.remove();
+          this.selectedIds.delete(p.el.getAttribute('data-xcs-id')!);
+        } else {
+          p.el.setAttribute('d', stringifySvgPath(p.cmds));
+        }
+      });
+      this.clearSelection();
+      pathInfos.forEach(p => {
+         if (!p.merged) this.selectedIds.add(p.el.getAttribute('data-xcs-id')!);
+      });
+      if (this.selectedIds.size > 0) this.selectedId = Array.from(this.selectedIds)[0];
+      this.renderSelectionUI();
+      this.commit();
+    }
+  }
+  
   public applyImageFilters(brightness: number, contrast: number, blur: number) {
     const els = this.getSelectedEls();
     if (els.length !== 1) return;
@@ -336,6 +1097,182 @@ export class VectorEditor {
     }
   }
 
+  public async convertTextToPath(textEl?: SVGTextElement) {
+    if (!textEl) {
+      const els = this.getSelectedEls();
+      textEl = els.find(el => el.tagName.toLowerCase() === 'text') as SVGTextElement | undefined;
+    }
+    if (!textEl) return;
+
+    const clone = textEl.cloneNode(true) as SVGTextElement;
+    clone.removeAttribute('data-xcs-id');
+    clone.removeAttribute('class');
+    const computed = window.getComputedStyle(textEl);
+    clone.style.fontFamily = computed.fontFamily;
+    clone.style.fontSize = computed.fontSize;
+    clone.style.fontWeight = computed.fontWeight;
+    clone.style.fontStyle = computed.fontStyle;
+    clone.style.letterSpacing = computed.letterSpacing;
+    clone.style.wordSpacing = computed.wordSpacing;
+    clone.style.textAnchor = computed.textAnchor;
+    clone.setAttribute('fill', '#000000'); // Force black for binary tracing
+    clone.setAttribute('stroke', 'none');
+
+    const bbox = textEl.getBBox();
+    const scale = 4; // Use high-res for better tracing accuracy
+    
+    const pad = 40;
+    const w = bbox.width + pad * 2;
+    const h = bbox.height + pad * 2;
+    
+    // Position text cleanly inside the new viewbox
+    clone.setAttribute('transform', `translate(${pad - bbox.x}, ${pad - bbox.y})`);
+    
+    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${h * scale}" viewBox="0 0 ${w} ${h}">${clone.outerHTML}</svg>`;
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const imgData = await TracingEngine.getImageData(url);
+    URL.revokeObjectURL(url);
+    
+    // Trace sharp corners using 0 threshold to retain letter fidelity
+    const resultSvg = await TracingEngine.traceSilhouette(imgData, 128, 0); 
+    
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(resultSvg, 'image/svg+xml');
+    
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const id = textEl.getAttribute('data-xcs-id')!;
+    group.setAttribute('data-xcs-id', id);
+    
+    const mainSvg = this.container.querySelector('svg') as SVGSVGElement;
+    const m = mainSvg.createSVGMatrix()
+      .translate(bbox.x - pad, bbox.y - pad)
+      .scale(1 / scale);
+      
+    const originalFill = textEl.getAttribute('fill') || '#000000';
+      
+    doc.querySelectorAll('path').forEach(p => {
+      const pClone = p.cloneNode(true) as SVGPathElement;
+      pClone.removeAttribute('data-xcs-id');
+      pClone.setAttribute('fill', originalFill);
+      
+      const tList = pClone.transform.baseVal;
+      const t = mainSvg.createSVGTransformFromMatrix(m);
+      tList.appendItem(t);
+      group.appendChild(pClone);
+    });
+    
+    if (group.children.length === 0) return undefined; // tracing failed somehow
+    
+    textEl.replaceWith(group);
+    if (this.selectedId === id || this.selectedIds.has(id)) {
+      this.renderSelectionUI();
+      this.notifyChange(group);
+    }
+    this.commit();
+    return group;
+  }
+
+  public async warpTextToPath(textEl?: SVGTextElement, targetPath?: SVGPathElement) {
+    if (!textEl || !targetPath) {
+      const els = this.getSelectedEls();
+      textEl = els.find(el => el.tagName.toLowerCase() === 'text') as SVGTextElement | undefined;
+      targetPath = els.find(el => el.tagName.toLowerCase() === 'path' || el.tagName.toLowerCase() === 'polyline') as SVGPathElement | undefined;
+    }
+    if (!textEl || !targetPath) return;
+
+    const textBBox = textEl.getBBox();
+    const group = await this.convertTextToPath(textEl);
+    if (!group) return;
+
+    let pathTotalLength = 0;
+    try { pathTotalLength = targetPath.getTotalLength(); } catch { return; }
+    if (pathTotalLength === 0) return;
+
+    const letters = Array.from(group.children) as SVGPathElement[];
+    const letterData = letters.map(l => {
+      const bbox = this.getTransformedBBox(l);
+      return { el: l, bbox: bbox || {x:0, y:0, width:0, height:0} };
+    }).sort((a, b) => a.bbox.x - b.bbox.x);
+
+    let startOffset = (pathTotalLength - textBBox.width) / 2;
+    if (startOffset < 0) startOffset = 0;
+
+    const mainSvg = this.container.querySelector('svg')!;
+    
+    letterData.forEach(data => {
+      const letterCenterX = data.bbox.x + data.bbox.width / 2;
+      const localOffsetX = letterCenterX - textBBox.x;
+      
+      const lengthAlongPath = startOffset + localOffsetX;
+      if (lengthAlongPath > pathTotalLength) return;
+
+      const pt = targetPath!.getPointAtLength(lengthAlongPath);
+      
+      const delta = 0.5;
+      let p1 = pt;
+      let p2 = pt;
+      if (lengthAlongPath + delta <= pathTotalLength) {
+        p2 = targetPath!.getPointAtLength(lengthAlongPath + delta);
+      } else {
+        p1 = targetPath!.getPointAtLength(lengthAlongPath - delta);
+      }
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x) * 180 / Math.PI;
+
+      const lcx = letterCenterX;
+      const lcy = textBBox.y + textBBox.height; // Use bottom baseline for wrapping so it sits ON the curve
+
+      const dx = pt.x - lcx;
+      const dy = pt.y - lcy;
+
+      const m = mainSvg.createSVGMatrix()
+        .translate(pt.x, pt.y)
+        .rotate(angle)
+        .translate(-pt.x, -pt.y)
+        .translate(dx, dy);
+
+      const tList = data.el.transform.baseVal;
+      let consolidated = tList.consolidate();
+      if (!consolidated) {
+          consolidated = mainSvg.createSVGTransform();
+          consolidated.setMatrix(mainSvg.createSVGMatrix());
+          tList.appendItem(consolidated);
+      }
+      consolidated.setMatrix(m.multiply(consolidated.matrix));
+    });
+    
+    this.commit();
+    this.renderSelectionUI();
+  }
+
+  public injectStencilBridges(bridgeWidth: number = 2) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+
+    const svgs = els.map(el => el.outerHTML);
+    const resultSvg = Pathfinder.injectStencilBridges(svgs, bridgeWidth);
+    if (!resultSvg) return;
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(resultSvg, 'image/svg+xml');
+    const resultElement = doc.querySelector('svg')?.firstElementChild as SVGGraphicsElement;
+    
+    if (resultElement) {
+      resultElement.setAttribute('data-xcs-id', `stencil-${Date.now()}`);
+      els[0].replaceWith(resultElement);
+      for (let i = 1; i < els.length; i++) els[i].remove();
+
+      this.selectedIds.clear();
+      this.selectedIds.add(resultElement.getAttribute('data-xcs-id')!);
+      this.selectedId = resultElement.getAttribute('data-xcs-id')!;
+      
+      this.renderSelectionUI();
+      this.notifyChange(resultElement);
+      this.commit();
+    }
+  }
+
   // ── Mouse Handlers ────────────────────────────────────────────
 
   private onMouseDown(e: MouseEvent) {
@@ -356,6 +1293,7 @@ export class VectorEditor {
         if (allElements) {
           allElements.forEach(el => {
             if (el.tagName.toLowerCase() === 'g' && el.classList.contains('vectronomy-frame')) return;
+            if (el.classList.contains('isolated-backdrop')) return;
             
             const fill = el.getAttribute('fill') || 'none';
             const stroke = el.getAttribute('stroke') || 'none';
@@ -388,7 +1326,7 @@ export class VectorEditor {
       return;
     }
 
-    if (this.activeTool !== 'select' && this.activeTool !== 'node') {
+    if (this.activeTool !== 'select' && this.activeTool !== 'node' && this.activeTool !== 'scissors') {
       // Vector brush and eraser do not intercept raster edits anymore
       this.startDraw(e); return;
     }
@@ -397,9 +1335,23 @@ export class VectorEditor {
       const nodeHandle = target.closest('[data-node-index]') as SVGElement | null;
       if (nodeHandle) {
         e.stopPropagation(); e.preventDefault();
-        this.activeNodeIndex = parseInt(nodeHandle.getAttribute('data-node-index')!);
+        const index = parseInt(nodeHandle.getAttribute('data-node-index')!);
+        if (e.shiftKey) {
+          if (this.selectedNodeIndices.has(index)) {
+            this.selectedNodeIndices.delete(index);
+          } else {
+            this.selectedNodeIndices.add(index);
+          }
+        } else {
+          if (!this.selectedNodeIndices.has(index)) {
+            this.selectedNodeIndices.clear();
+            this.selectedNodeIndices.add(index);
+          }
+        }
         this.draggingNode = true;
         this.dragStartX = e.clientX; this.dragStartY = e.clientY;
+        const pt = this.getSvgPoint(e);
+        if (pt) this.lastSnappedPt = pt;
         this.renderSelectionUI();
         this.onInteractionStart();
         return;
@@ -433,7 +1385,7 @@ export class VectorEditor {
         
         // If clicking a different path, reset node state
         if (this.nodeEditTarget !== clickedPath) {
-          this.activeNodeIndex = null;
+          this.selectedNodeIndices.clear();
           this.parsedCommands = [];
           this.editingNodes = [];
         }
@@ -500,6 +1452,12 @@ export class VectorEditor {
       this.renderSelectionUI();
       this.notifyChange(this.getSelectedEls()[0] || null);
       this.onInteractionStart();
+    } else if (this.activeTool === 'scissors') {
+      const closestPath = target.closest('path') as SVGPathElement | null;
+      if (closestPath) {
+        this.cutSegmentAtCursor(e, closestPath);
+      }
+      return;
     } else {
       // Start Marquee Selection
       if (!e.shiftKey) {
@@ -512,7 +1470,35 @@ export class VectorEditor {
     }
   }
 
-  private convertToPath(el: SVGElement): SVGPathElement {
+  public async convertSelectedToPath() {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    let changed = false;
+    for (const el of els) {
+      const tag = el.tagName.toLowerCase();
+      if (tag === 'text') {
+        const group = await this.convertTextToPath(el as SVGTextElement);
+        if (group) changed = true;
+      } else if (['rect', 'circle', 'ellipse', 'line', 'polygon', 'polyline'].includes(tag)) {
+        const oldId = el.getAttribute('data-xcs-id')!;
+        const newPath = this.convertToPath(el);
+        this.selectedIds.delete(oldId);
+        this.selectedIds.add(newPath.getAttribute('data-xcs-id')!);
+        if (this.selectedId === oldId) {
+          this.selectedId = newPath.getAttribute('data-xcs-id')!;
+        }
+        changed = true;
+      }
+    }
+    
+    if (changed) {
+      this.renderSelectionUI();
+      this.commit();
+    }
+  }
+
+  public convertToPath(el: SVGElement): SVGPathElement {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     const tag = el.tagName.toLowerCase();
     let d = '';
@@ -620,7 +1606,7 @@ export class VectorEditor {
     }
 
     if (!this.isDragging && !this.draggingNode) return;
-    if (this.draggingNode && this.activeNodeIndex !== null && this.nodeEditTarget) {
+    if (this.draggingNode && this.selectedNodeIndices.size > 0 && this.nodeEditTarget) {
       const scale = this.getScale();
       const dx = (e.clientX - this.dragStartX) / scale;
       const dy = (e.clientY - this.dragStartY) / scale;
@@ -646,30 +1632,46 @@ export class VectorEditor {
         }
       }
 
-      const node = this.editingNodes[this.activeNodeIndex];
-      node.x += localDx;
-      node.y += localDy;
-      
-      const cmd = this.parsedCommands[node.cmdIndex];
-      cmd.args[node.argIndexX] = node.x;
-      cmd.args[node.argIndexY] = node.y;
+      for (const idx of this.selectedNodeIndices) {
+        const node = this.editingNodes[idx];
+        node.x += localDx;
+        node.y += localDy;
+        
+        const cmd = this.parsedCommands[node.cmdIndex];
+        cmd.args[node.argIndexX] = node.x;
+        cmd.args[node.argIndexY] = node.y;
+      }
       
       el.setAttribute('d', stringifySvgPath(this.parsedCommands));
       
       this.dragStartX = e.clientX;
       this.dragStartY = e.clientY;
+      const pt = this.getSvgPoint(e);
+      if (pt) this.lastSnappedPt = pt;
       this.renderSelectionUI();
       return;
     }
 
-
     const scale = this.getScale();
-    const dx = (e.clientX - this.dragStartX) / scale;
-    const dy = (e.clientY - this.dragStartY) / scale;
+    let dx = (e.clientX - this.dragStartX) / scale;
+    let dy = (e.clientY - this.dragStartY) / scale;
 
     const els = this.getSelectedEls();
     if (this.dragMode === 'move') {
+      const pt = this.getSvgPoint(e);
+      if (pt && this.lastSnappedPt) {
+        dx = pt.x - this.lastSnappedPt.x;
+        dy = pt.y - this.lastSnappedPt.y;
+        this.lastSnappedPt = pt;
+      }
       els.forEach((el: SVGGraphicsElement) => this.translateEl(el, dx, dy));
+      
+      // Feature 56: Centroid Snap Tracker
+      if (this.centroidSnapEnabled) {
+         this.drawCentroidGuides(els);
+      } else {
+         this.clearCentroidGuides();
+      }
     } else if (this.dragMode === 'resize') {
       this.resizeSelection(dx, dy, this.activeHandle!, e.shiftKey, e.altKey);
     } else if (this.dragMode === 'rotate') {
@@ -682,6 +1684,77 @@ export class VectorEditor {
     this.notifyChange(els[0] || null);
   }
 
+  private centroidGuideH: SVGLineElement | null = null;
+  private centroidGuideV: SVGLineElement | null = null;
+
+  private clearCentroidGuides() {
+    if (this.centroidGuideH) { this.centroidGuideH.remove(); this.centroidGuideH = null; }
+    if (this.centroidGuideV) { this.centroidGuideV.remove(); this.centroidGuideV = null; }
+  }
+
+  private drawCentroidGuides(els: SVGGraphicsElement[]) {
+    if (els.length === 0) return;
+    const uBox = this.getUnionBBox(els);
+    const cx = uBox.x + uBox.width / 2;
+    const cy = uBox.y + uBox.height / 2;
+
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+    if (!mainSvg || !viewport) return;
+
+    let snapX = false, snapY = false;
+    const threshold = 10 / this.getScale(); // snap within 10 screen pixels
+
+    const allEls = viewport.querySelectorAll('path, rect, circle, ellipse, line, polyline, polygon');
+    for (const other of Array.from(allEls)) {
+      if (els.includes(other as SVGGraphicsElement)) continue;
+      const otherBox = this.getTransformedBBox(other as SVGGraphicsElement);
+      if (!otherBox) continue;
+      const ocx = otherBox.x + otherBox.width / 2;
+      const ocy = otherBox.y + otherBox.height / 2;
+
+      if (!snapX && Math.abs(cx - ocx) < threshold) {
+        snapX = true;
+        const tx = ocx - cx;
+        els.forEach(el => this.translateEl(el, tx, 0));
+        
+        if (!this.centroidGuideV) {
+          this.centroidGuideV = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          this.centroidGuideV.setAttribute('stroke', '#00ffc2');
+          this.centroidGuideV.setAttribute('stroke-dasharray', '5,5');
+          this.centroidGuideV.style.pointerEvents = 'none';
+          viewport.appendChild(this.centroidGuideV);
+        }
+        this.centroidGuideV.setAttribute('x1', `${ocx}`);
+        this.centroidGuideV.setAttribute('y1', '-10000');
+        this.centroidGuideV.setAttribute('x2', `${ocx}`);
+        this.centroidGuideV.setAttribute('y2', '10000');
+      }
+
+      if (!snapY && Math.abs(cy - ocy) < threshold) {
+        snapY = true;
+        const ty = ocy - cy;
+        els.forEach(el => this.translateEl(el, 0, ty));
+
+        if (!this.centroidGuideH) {
+          this.centroidGuideH = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          this.centroidGuideH.setAttribute('stroke', '#00ffc2');
+          this.centroidGuideH.setAttribute('stroke-dasharray', '5,5');
+          this.centroidGuideH.style.pointerEvents = 'none';
+          viewport.appendChild(this.centroidGuideH);
+        }
+        this.centroidGuideH.setAttribute('x1', '-10000');
+        this.centroidGuideH.setAttribute('y1', `${ocy}`);
+        this.centroidGuideH.setAttribute('x2', '10000');
+        this.centroidGuideH.setAttribute('y2', `${ocy}`);
+      }
+      if (snapX && snapY) break;
+    }
+
+    if (!snapX && this.centroidGuideV) { this.centroidGuideV.remove(); this.centroidGuideV = null; }
+    if (!snapY && this.centroidGuideH) { this.centroidGuideH.remove(); this.centroidGuideH = null; }
+  }
+
   private onMouseUp() {
 
     if (this.isDrawing) {
@@ -692,6 +1765,8 @@ export class VectorEditor {
       this.finalizeDraw();
       return;
     }
+
+    this.clearCentroidGuides();
     
     if (this.isMarquee && this.marqueeEl) {
       const mainSvg = this.container.querySelector('svg');
@@ -896,7 +1971,8 @@ export class VectorEditor {
       
       // Find the new node index
       const newNodes = extractNodes(this.parsedCommands);
-      this.activeNodeIndex = newNodes.findIndex(n => n.cmdIndex === closestIndex);
+      this.selectedNodeIndices.clear();
+      this.selectedNodeIndices.add(newNodes.findIndex(n => n.cmdIndex === closestIndex));
       
       this.renderSelectionUI();
       this.commit();
@@ -908,6 +1984,19 @@ export class VectorEditor {
     if (this.activeTool === 'node' && this.nodeEditTarget) {
       // Add a node to the currently edited path
       this.addNodeAtCursor(e, this.nodeEditTarget);
+      return;
+    }
+
+    const target = e.target as SVGElement;
+    const textEl = target.closest('text');
+    if (textEl && textEl.hasAttribute('data-xcs-id')) {
+      const newText = prompt('Edit text:', textEl.textContent || '');
+      if (newText !== null) {
+        textEl.textContent = newText;
+        this.commit();
+        this.renderSelectionUI();
+        this.notifyChange(textEl);
+      }
       return;
     }
 
@@ -987,6 +2076,39 @@ export class VectorEditor {
         this.drawingEl!.setAttribute('d', d);
         this.renderPenOverlay(pt);
         this.onDrawingChange?.();
+      }
+      return;
+    }
+
+    if (this.activeTool === 'text') {
+      const textContent = prompt('Enter text:', 'Double-click to edit');
+      if (textContent) {
+        this.clearSelection();
+        const mainSvg = this.container.querySelector('svg');
+        const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+        if (viewport) {
+          const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          textEl.setAttribute('x', `${pt.x}`);
+          textEl.setAttribute('y', `${pt.y}`);
+          const id = `drawn-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+          textEl.setAttribute('data-xcs-id', id);
+          textEl.setAttribute('font-family', 'sans-serif');
+          textEl.setAttribute('font-size', '24');
+          textEl.setAttribute('fill', '#00ffc2');
+          textEl.setAttribute('text-anchor', 'start');
+          textEl.textContent = textContent;
+
+          viewport.appendChild(textEl);
+          
+          this.selectedId = id;
+          this.selectedIds.clear();
+          this.selectedIds.add(id);
+          this.commit();
+          this.activeTool = 'select';
+          this.onDrawingChange?.();
+          this.renderSelectionUI();
+          this.notifyChange(textEl);
+        }
       }
       return;
     }
@@ -1132,11 +2254,28 @@ export class VectorEditor {
       if (!pt) return;
 
       if (this.penDraggingPoint) {
+        let dx = pt.x - this.penDraggingPoint.x;
+        let dy = pt.y - this.penDraggingPoint.y;
+
+        if (this.handleSnapEnabled) {
+          const angle = Math.atan2(dy, dx);
+          const deg = angle * (180 / Math.PI);
+          const snappedDeg = Math.round(deg / 90) * 90;
+          let diff = Math.abs(deg - snappedDeg);
+          if (diff > 180) diff = 360 - diff;
+          if (diff <= 5) {
+            const length = Math.hypot(dx, dy);
+            const rad = snappedDeg * (Math.PI / 180);
+            dx = length * Math.cos(rad);
+            dy = length * Math.sin(rad);
+            pt.x = this.penDraggingPoint.x + dx;
+            pt.y = this.penDraggingPoint.y + dy;
+          }
+        }
+
         this.penDraggingPoint.cp2x = pt.x;
         this.penDraggingPoint.cp2y = pt.y;
 
-        const dx = pt.x - this.penDraggingPoint.x;
-        const dy = pt.y - this.penDraggingPoint.y;
         this.penDraggingPoint.cp1x = this.penDraggingPoint.x - dx;
         this.penDraggingPoint.cp1y = this.penDraggingPoint.y - dy;
 
@@ -1846,7 +2985,7 @@ export class VectorEditor {
     return transformed;
   }
 
-  private getSelectedEls(): SVGGraphicsElement[] {
+  public getSelectedEls(): SVGGraphicsElement[] {
     const mainSvg = this.container.querySelector('svg');
     if (!mainSvg || this.selectedIds.size === 0) return [];
     const els: SVGGraphicsElement[] = [];
@@ -1874,7 +3013,7 @@ export class VectorEditor {
     this.selectedId = null;
     this.selectedIds.clear();
     this.nodeEditTarget = null;
-    this.activeNodeIndex = null;
+    this.selectedNodeIndices.clear();
     this.parsedCommands = [];
     this.editingNodes = [];
     this.draggingNode = false;
@@ -1884,27 +3023,37 @@ export class VectorEditor {
 
 
   private deleteActiveNode() {
-    if (this.activeNodeIndex === null || !this.nodeEditTarget) return;
+    if (this.selectedNodeIndices.size === 0 || !this.nodeEditTarget) return;
     
-    const node = this.editingNodes[this.activeNodeIndex];
-    if (this.parsedCommands.length > 2) {
-      this.parsedCommands.splice(node.cmdIndex, 1);
-      
-      // If we deleted the first M command, the new first command should become an M
-      if (this.parsedCommands[0].type !== 'M') {
-        this.parsedCommands[0].type = 'M';
+    // Delete in reverse order to avoid shifting indices
+    const sortedIndices = Array.from(this.selectedNodeIndices).sort((a, b) => b - a);
+    
+    for (const idx of sortedIndices) {
+      if (this.parsedCommands.length > 2) {
+        const node = this.editingNodes[idx];
+        this.parsedCommands.splice(node.cmdIndex, 1);
+        
+        // If we deleted the first M command, the new first command should become an M
+        if (this.parsedCommands[0] && this.parsedCommands[0].type !== 'M' && this.parsedCommands.length > 0) {
+          this.parsedCommands[0].type = 'M';
+        }
       }
-      
-      this.nodeEditTarget.setAttribute('d', stringifySvgPath(this.parsedCommands));
-      this.activeNodeIndex = null;
-      // Re-parse
-      this.renderSelectionUI();
-      this.commit();
     }
+    
+    if (this.parsedCommands.length > 0) {
+      this.nodeEditTarget.setAttribute('d', stringifySvgPath(this.parsedCommands));
+    } else {
+      this.nodeEditTarget.remove();
+      this.clearSelection();
+    }
+    this.selectedNodeIndices.clear();
+    // Re-parse
+    this.renderSelectionUI();
+    this.commit();
   }
 
   deleteSelected() {
-    if (this.activeTool === 'node' && this.activeNodeIndex !== null) {
+    if (this.activeTool === 'node' && this.selectedNodeIndices.size > 0) {
       this.deleteActiveNode();
       return;
     }
@@ -1961,8 +3110,15 @@ export class VectorEditor {
     rect.setAttribute('y', `${tBox.y - 1 * invScale}`);
     rect.setAttribute('width', `${tBox.width + 2 * invScale}`);
     rect.setAttribute('height', `${tBox.height + 2 * invScale}`);
-    rect.setAttribute('fill', 'rgba(0,255,194,0.04)');
-    rect.setAttribute('stroke', '#00ffc2');
+          let highlightColor = '#00ffc2';
+      let fillColor = 'rgba(0,255,194,0.04)';
+      const groupEl = els.find(e => e.hasAttribute('data-group-color')) || els[0]?.closest('[data-group-color]');
+      if (groupEl) {
+        highlightColor = groupEl.getAttribute('data-group-color') || '#00ffc2';
+        fillColor = 'transparent'; // Remove fill if it's a custom group color
+      }
+      rect.setAttribute('fill', fillColor);
+      rect.setAttribute('stroke', highlightColor);
     rect.setAttribute('stroke-width', `${1.5 * invScale}`);
     rect.setAttribute('stroke-dasharray', `${3 * invScale},${2 * invScale}`);
     g.appendChild(rect);
@@ -2075,10 +3231,10 @@ export class VectorEditor {
         }
       }
 
-      if (this.activeNodeIndex !== null) {
-        const activeRect = g.querySelector(`rect[data-node-index="${this.activeNodeIndex}"]`);
+      for (const idx of this.selectedNodeIndices) {
+        const activeRect = g.querySelector(`rect[data-node-index="${idx}"]`);
         if (activeRect) {
-          const node = this.editingNodes[this.activeNodeIndex];
+          const node = this.editingNodes[idx];
           let nx = node.x, ny = node.y;
           if (pathToViewport) {
             const tx = pathToViewport.a * node.x + pathToViewport.c * node.y + pathToViewport.e;
@@ -2139,7 +3295,7 @@ export class VectorEditor {
         nx = tx; ny = ty;
       }
 
-      const isActive = this.activeNodeIndex === idx;
+      const isActive = this.selectedNodeIndices.has(idx);
       const c = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       c.setAttribute('x', `${nx - hs}`);
       c.setAttribute('y', `${ny - hs}`);
@@ -2378,6 +3534,23 @@ export class VectorEditor {
         transformList.appendItem(matrixTransform);
       }
       matrixTransform.setMatrix(sMat.multiply(matrixTransform.matrix));
+
+      // Compensate stroke-width so it doesn't scale with the transform.
+      // Use geometric mean of scale factors as the compensation factor.
+      const strokeScaleFactor = Math.sqrt(Math.abs(sx * sy));
+      if (strokeScaleFactor > 0 && strokeScaleFactor !== 1) {
+        const elementsToFix: Element[] = [el];
+        if (el.tagName.toLowerCase() === 'g') {
+          el.querySelectorAll('*').forEach(child => elementsToFix.push(child));
+        }
+        for (const target of elementsToFix) {
+          const sw = target.getAttribute('stroke-width');
+          if (sw !== null && sw !== '') {
+            const newSw = parseFloat(sw) / strokeScaleFactor;
+            target.setAttribute('stroke-width', `${newSw}`);
+          }
+        }
+      }
     });
   }
 
@@ -2496,6 +3669,16 @@ export class VectorEditor {
 
   // ── Notify ────────────────────────────────────────────────────
 
+  private getPivotCoords(uBox: {x: number, y: number, width: number, height: number}, pivot: string): { x: number, y: number } {
+    let px = uBox.x;
+    let py = uBox.y;
+    if (pivot.endsWith('c')) px = uBox.x + uBox.width / 2;
+    if (pivot.endsWith('r')) px = uBox.x + uBox.width;
+    if (pivot.startsWith('c')) py = uBox.y + uBox.height / 2;
+    if (pivot.startsWith('b')) py = uBox.y + uBox.height;
+    return { x: px, y: py };
+  }
+
   private buildElementProperties(el: SVGGraphicsElement): ElementProperties {
     const els = this.getSelectedEls();
     const tBox = this.getUnionBBox(els);
@@ -2514,11 +3697,26 @@ export class VectorEditor {
     const fillColor = fillEnabled ? fill : '#000000';
     const fillOpacity = Math.round(parseFloat(el.getAttribute('fill-opacity') || '1') * 100);
     const fillRule = el.getAttribute('fill-rule') || 'nonzero';
+
+    let textContent, fontFamily, fontSize, fontWeight, fontStyle, letterSpacing, wordSpacing, textAnchor;
+    if (tag === 'text') {
+      const computed = window.getComputedStyle(el);
+      textContent = el.textContent || '';
+      fontFamily = el.getAttribute('font-family') || computed.fontFamily;
+      fontSize = parseFloat(el.getAttribute('font-size') || computed.fontSize) || 16;
+      fontWeight = el.getAttribute('font-weight') || computed.fontWeight;
+      fontStyle = el.getAttribute('font-style') || computed.fontStyle;
+      letterSpacing = parseFloat(el.getAttribute('letter-spacing') || '0') || 0;
+      wordSpacing = parseFloat(el.getAttribute('word-spacing') || '0') || 0;
+      textAnchor = el.getAttribute('text-anchor') || 'start';
+    }
+
     return {
       x: tBox.x, y: tBox.y, w: tBox.width, h: tBox.height,
       rotation, opacity, strokeColor, strokeW, strokeCap, strokeJoin, strokeOpacity,
       fillEnabled, fillColor, fillOpacity, fillRule,
       elementType: tag.toUpperCase(),
+      textContent, fontFamily, fontSize, fontWeight, fontStyle, letterSpacing, wordSpacing, textAnchor
     };
   }
 
@@ -2542,8 +3740,9 @@ export class VectorEditor {
     const strokeW = els.reduce((s, e) => s + parseFloat(e.getAttribute('stroke-width') || '1'), 0) / els.length;
     const fill = first.getAttribute('fill') || 'none';
     const fillEnabled = fill !== 'none' && fill !== '';
+    const pivotCoords = this.getPivotCoords(tBox, this.transformPivot);
     return {
-      x: tBox.x, y: tBox.y, w: tBox.width, h: tBox.height,
+      x: pivotCoords.x, y: pivotCoords.y, w: tBox.width, h: tBox.height,
       rotation: 0, opacity, strokeColor: first.getAttribute('stroke') || '#000000',
       strokeW, strokeCap: first.getAttribute('stroke-linecap') || 'butt',
       strokeJoin: first.getAttribute('stroke-linejoin') || 'miter', strokeOpacity: 100,
@@ -2619,8 +3818,9 @@ export class VectorEditor {
     };
 
     if (props.x !== undefined || props.y !== undefined) {
-      const tx = (props.x ?? uBox.x) - uBox.x;
-      const ty = (props.y ?? uBox.y) - uBox.y;
+      const curPivot = this.getPivotCoords(uBox, this.transformPivot);
+      const tx = (props.x ?? curPivot.x) - curPivot.x;
+      const ty = (props.y ?? curPivot.y) - curPivot.y;
       els.forEach((el: SVGGraphicsElement) => this.translateEl(el, tx, ty));
     }
 
@@ -2630,11 +3830,12 @@ export class VectorEditor {
       const scaleX = Math.max(0.001, w) / Math.max(uBox.width, 0.001);
       const scaleY = Math.max(0.001, h) / Math.max(uBox.height, 0.001);
       
+      const curPivot = this.getPivotCoords(uBox, this.transformPivot);
       const mainSvg = this.container.querySelector('svg')!;
       const sMat = mainSvg.createSVGMatrix()
-        .translate(uBox.x, uBox.y)
+        .translate(curPivot.x, curPivot.y)
         .scaleNonUniform(scaleX, scaleY)
-        .translate(-uBox.x, -uBox.y);
+        .translate(-curPivot.x, -curPivot.y);
 
       els.forEach((el: SVGGraphicsElement) => {
         if (el.classList.contains('vectronomy-frame')) {
@@ -2679,12 +3880,38 @@ export class VectorEditor {
           transformList.appendItem(matrixTransform);
         }
         matrixTransform.setMatrix(sMat.multiply(matrixTransform.matrix));
+
+        // Compensate stroke-width so it doesn't scale with the transform.
+        const strokeScaleFactor = Math.sqrt(Math.abs(scaleX * scaleY));
+        if (strokeScaleFactor > 0 && strokeScaleFactor !== 1) {
+          const elementsToFix: Element[] = [el];
+          if (el.tagName.toLowerCase() === 'g') {
+            el.querySelectorAll('*').forEach(child => elementsToFix.push(child));
+          }
+          for (const target of elementsToFix) {
+            const sw = target.getAttribute('stroke-width');
+            if (sw !== null && sw !== '') {
+              const newSw = parseFloat(sw) / strokeScaleFactor;
+              target.setAttribute('stroke-width', `${newSw}`);
+            }
+          }
+        }
+      });
+    }
+
+    
+    if (props.textContent !== undefined) {
+      els.forEach((el: SVGGraphicsElement) => {
+        if (el.tagName.toLowerCase() === 'text') {
+          el.textContent = props.textContent!;
+        }
       });
     }
 
     if (props.rotation !== undefined) {
-      const cx = uBox.x + uBox.width / 2;
-      const cy = uBox.y + uBox.height / 2;
+      const curPivot = this.getPivotCoords(uBox, this.transformPivot);
+      const cx = curPivot.x;
+      const cy = curPivot.y;
       
       const mainSvg = this.container.querySelector('svg')!;
       
@@ -2710,8 +3937,6 @@ export class VectorEditor {
       });
     }
 
-// setAttr defined above
-
     if (props.opacity !== undefined) setAttr('opacity', `${(props.opacity / 100).toFixed(2)}`);
     if (props.strokeColor !== undefined) setAttr('stroke', props.strokeColor);
     if (props.strokeW !== undefined) setAttr('stroke-width', `${props.strokeW}`);
@@ -2725,6 +3950,14 @@ export class VectorEditor {
       if (props.fillOpacity !== undefined) setAttr('fill-opacity', `${(props.fillOpacity / 100).toFixed(2)}`);
       if (props.fillRule !== undefined) setAttr('fill-rule', props.fillRule);
     }
+
+    if (props.fontFamily !== undefined) setAttr('font-family', props.fontFamily);
+    if (props.fontSize !== undefined) setAttr('font-size', `${props.fontSize}`);
+    if (props.fontWeight !== undefined) setAttr('font-weight', props.fontWeight);
+    if (props.fontStyle !== undefined) setAttr('font-style', props.fontStyle);
+    if (props.letterSpacing !== undefined) setAttr('letter-spacing', `${props.letterSpacing}`);
+    if (props.wordSpacing !== undefined) setAttr('word-spacing', `${props.wordSpacing}`);
+    if (props.textAnchor !== undefined) setAttr('text-anchor', props.textAnchor);
 
     this.renderSelectionUI();
     this.commit();
@@ -2762,15 +3995,17 @@ export class VectorEditor {
   }
 
   nudgeSelected(dx: number, dy: number) {
-    if (this.activeTool === 'node' && this.activeNodeIndex !== null && this.nodeEditTarget) {
+    if (this.activeTool === 'node' && this.selectedNodeIndices.size > 0 && this.nodeEditTarget) {
       this.onInteractionStart();
-      const node = this.editingNodes[this.activeNodeIndex];
-      node.x += dx;
-      node.y += dy;
-      
-      const cmd = this.parsedCommands[node.cmdIndex];
-      cmd.args[node.argIndexX] = node.x;
-      cmd.args[node.argIndexY] = node.y;
+      for (const index of this.selectedNodeIndices) {
+        const node = this.editingNodes[index];
+        node.x += dx;
+        node.y += dy;
+        
+        const cmd = this.parsedCommands[node.cmdIndex];
+        cmd.args[node.argIndexX] = node.x;
+        cmd.args[node.argIndexY] = node.y;
+      }
       
       this.nodeEditTarget.setAttribute('d', stringifySvgPath(this.parsedCommands));
       this.renderSelectionUI();
@@ -2805,12 +4040,13 @@ export class VectorEditor {
     const canvasY = vb?.y || 0;
 
     const tBox = this.getUnionBBox(els);
+    const pivotCoords = this.getPivotCoords(tBox, this.transformPivot);
     let dx = 0, dy = 0;
 
     switch (mode) {
       case 'left':     dx = canvasX - tBox.x; break;
-      case 'center-h': dx = canvasX + canvasW / 2 - tBox.x - tBox.width / 2; break;
-      case 'right':    dx = canvasX + canvasW - tBox.x - tBox.width; break;
+      case 'center-h': dx = canvasX + canvasW / 2 - pivotCoords.x; break;
+      case 'right':    dx = canvasX + canvasW - (tBox.x + tBox.width); break;
       case 'top':      dy = canvasY - tBox.y; break;
       case 'center-v': dy = canvasY + canvasH / 2 - tBox.y - tBox.height / 2; break;
       case 'bottom':   dy = canvasY + canvasH - tBox.y - tBox.height; break;
@@ -2822,9 +4058,129 @@ export class VectorEditor {
     this.commit();
   }
 
+  public alignSelectedNodes(alignment: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom') {
+    if (this.selectedNodeIndices.size < 2 || !this.nodeEditTarget) return;
+    
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    const nodes = Array.from(this.selectedNodeIndices).map(idx => this.editingNodes[idx]);
+    
+    for (const node of nodes) {
+        if (node.x < minX) minX = node.x;
+        if (node.x > maxX) maxX = node.x;
+        if (node.y < minY) minY = node.y;
+        if (node.y > maxY) maxY = node.y;
+    }
+    
+    for (const node of nodes) {
+        if (alignment === 'left') node.x = minX;
+        else if (alignment === 'right') node.x = maxX;
+        else if (alignment === 'center-h') node.x = (minX + maxX) / 2;
+        else if (alignment === 'top') node.y = minY;
+        else if (alignment === 'bottom') node.y = maxY;
+        else if (alignment === 'center-v') node.y = (minY + maxY) / 2;
+        
+        const cmd = this.parsedCommands[node.cmdIndex];
+        cmd.args[node.argIndexX] = node.x;
+        cmd.args[node.argIndexY] = node.y;
+    }
+    
+    this.nodeEditTarget.setAttribute('d', stringifySvgPath(this.parsedCommands));
+    this.renderSelectionUI();
+    this.commit();
+  }
+
+  public cutSegmentAtCursor(e: MouseEvent, el: SVGPathElement) {
+    const pt = this.getSvgPoint(e);
+    if (!pt) return;
+    
+    const mainSvg = this.container.querySelector('svg') as SVGSVGElement | null;
+    const viewport = mainSvg?.querySelector('#viewport') as SVGGraphicsElement || mainSvg;
+    let localPt = pt;
+    if (viewport && el) {
+      const pathCTM = el.getCTM();
+      const vpCTM = (viewport as SVGGraphicsElement).getCTM();
+      if (pathCTM && vpCTM) {
+        const vpToPath = pathCTM.inverse().multiply(vpCTM);
+        const lx = vpToPath.a * pt.x + vpToPath.c * pt.y + vpToPath.e;
+        const ly = vpToPath.b * pt.x + vpToPath.d * pt.y + vpToPath.f;
+        localPt = new DOMPoint(lx, ly);
+      }
+    }
+    
+    const totalLength = el.getTotalLength();
+    let minDistance = Infinity;
+    let closestLength = 0;
+    let closestPt = localPt;
+
+    const samples = 100;
+    for (let i = 0; i <= samples; i++) {
+      const len = (i / samples) * totalLength;
+      const p = el.getPointAtLength(len);
+      const dist = Math.hypot(localPt.x - p.x, localPt.y - p.y);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestLength = len;
+        closestPt = p as DOMPoint;
+      }
+    }
+
+    const fineSamples = 20;
+    const searchRange = totalLength / samples;
+    const startLen = Math.max(0, closestLength - searchRange / 2);
+    const endLen = Math.min(totalLength, closestLength + searchRange / 2);
+
+    for (let i = 0; i <= fineSamples; i++) {
+      const len = startLen + (i / fineSamples) * (endLen - startLen);
+      const p = el.getPointAtLength(len);
+      const dist = Math.hypot(localPt.x - p.x, localPt.y - p.y);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestLength = len;
+        closestPt = p as DOMPoint;
+      }
+    }
+
+    const scale = this.getScale();
+    const hitThreshold = 15 / scale;
+    if (minDistance > hitThreshold) return;
+
+    // Use Paper.js for accurate splitting
+    const svgStr = `<svg xmlns="http://www.w3.org/2000/svg">${el.outerHTML}</svg>`;
+    const isStrokeOnly = window.getComputedStyle(el).fill === 'none';
+    
+    // Create a small circle to act as scissors
+    const cutRadius = 0.5 / scale;
+    const cutCircleSvg = `<svg xmlns="http://www.w3.org/2000/svg"><circle cx="${closestPt.x}" cy="${closestPt.y}" r="${cutRadius}" fill="black"/></svg>`;
+    
+    const resultSvgStr = Pathfinder.performOperation(svgStr, cutCircleSvg, 'subtract', isStrokeOnly);
+    
+    if (resultSvgStr) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(resultSvgStr, 'image/svg+xml');
+        const newPaths = Array.from(doc.querySelectorAll('path, rect, circle, ellipse, polygon, polyline, line')) as SVGElement[];
+        
+        if (newPaths.length > 0) {
+            const originalId = el.getAttribute('data-xcs-id');
+            const fragment = document.createDocumentFragment();
+            newPaths.forEach((np, i) => {
+                Array.from(el.attributes).forEach(attr => {
+                    if (attr.name !== 'id' && attr.name !== 'd' && attr.name !== 'data-xcs-id') {
+                        np.setAttribute(attr.name, attr.value);
+                    }
+                });
+                if (i === 0 && originalId) np.setAttribute('data-xcs-id', originalId);
+                else np.setAttribute('data-xcs-id', `el-${Date.now()}-${Math.floor(Math.random() * 1000)}`);
+                fragment.appendChild(np);
+            });
+            el.replaceWith(fragment);
+            this.commit();
+        }
+    }
+  }
+
   // ── Commit / Snapshot ─────────────────────────────────────────
 
-  private commit() {
+  public commit() {
     if (!this.currentLayer) return;
     const mainSvg = this.container.querySelector('svg');
     if (!mainSvg) return;
@@ -2834,4 +4190,146 @@ export class VectorEditor {
     this.currentLayer.svg = newSvg;
     this.onUpdate(newSvg);
   }
+
+  // Feature 61: Image Drop Target Handler
+  public insertImage(dataUrl: string, x: number, y: number, width: number, height: number) {
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') || mainSvg;
+    if (!viewport) return;
+
+    const img = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    img.setAttribute('href', dataUrl);
+    img.setAttribute('x', `${x}`);
+    img.setAttribute('y', `${y}`);
+    img.setAttribute('width', `${width}`);
+    img.setAttribute('height', `${height}`);
+    img.setAttribute('preserveAspectRatio', 'none');
+    img.setAttribute('data-xcs-id', `img-${Date.now()}`);
+
+    viewport.appendChild(img);
+    this.commit();
+    this.clearSelection();
+    const id = img.getAttribute('data-xcs-id');
+    if (id) {
+      this.selectedId = id;
+      this.selectedIds.add(id);
+      this.renderSelectionUI();
+      this.notifyChange(img as unknown as SVGGraphicsElement);
+    }
+  }
+  // ── Division 9 (Layer Management) ─────────────────────────────
+  
+  public mergeSelectedLayers() {
+    const els = this.getSelectedEls();
+    if (els.length < 1) return;
+
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    const groupId = `el-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    group.setAttribute('data-xcs-id', groupId);
+
+    const parent = els[0].parentElement;
+    if (!parent) return;
+    parent.insertBefore(group, els[0]);
+
+    els.forEach(el => {
+      if (el.tagName.toLowerCase() === 'g' && !el.classList.contains('vectronomy-frame')) {
+        const transform = el.getAttribute('transform');
+        while(el.firstChild) {
+          const child = el.firstChild as SVGElement;
+          if (child.nodeType === Node.ELEMENT_NODE && transform) {
+             const existing = child.getAttribute('transform') || '';
+             child.setAttribute('transform', `${transform} ${existing}`.trim());
+          }
+          group.appendChild(child);
+        }
+        el.remove();
+      } else {
+        group.appendChild(el);
+      }
+    });
+
+    this.selectedIds.clear();
+    this.selectedIds.add(groupId);
+    this.selectedId = groupId;
+
+    this.commit();
+    this.renderSelectionUI();
+  }
+
+  public createSymbol(targetElement?: SVGGraphicsElement) {
+    if (!targetElement) {
+      const els = this.getSelectedEls();
+      if (els.length === 0) return;
+      targetElement = els[0];
+    }
+    
+    const mainSvg = this.container.querySelector('svg');
+    if (!mainSvg) return;
+    
+    let defs = mainSvg.querySelector('defs');
+    if (!defs) {
+       defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+       mainSvg.insertBefore(defs, mainSvg.firstChild);
+    }
+    
+    const symbolId = `symbol-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+    const symbolGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    symbolGroup.setAttribute('id', symbolId);
+    
+    const parent = targetElement.parentElement;
+    if (!parent) return;
+    
+    const useEl = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    useEl.setAttribute('href', `#${symbolId}`);
+    useEl.setAttribute('data-xcs-id', `use-${Date.now()}`);
+    
+    parent.insertBefore(useEl, targetElement);
+    symbolGroup.appendChild(targetElement);
+    defs.appendChild(symbolGroup);
+    
+    this.selectedIds.clear();
+    this.selectedIds.add(useEl.getAttribute('data-xcs-id')!);
+    this.selectedId = useEl.getAttribute('data-xcs-id')!;
+    
+    this.commit();
+    this.renderSelectionUI();
+  }
+
+  public exportSelectionToSvg() {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    const tBox = this.getUnionBBox(els);
+    if (!tBox) return;
+    
+    const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svgEl.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svgEl.setAttribute('width', `${tBox.width}`);
+    svgEl.setAttribute('height', `${tBox.height}`);
+    svgEl.setAttribute('viewBox', `0 0 ${tBox.width} ${tBox.height}`);
+    
+    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    group.setAttribute('transform', `translate(${-tBox.x}, ${-tBox.y})`);
+    
+    els.forEach(el => {
+      const clone = el.cloneNode(true) as SVGElement;
+      clone.removeAttribute('data-xcs-id');
+      group.appendChild(clone);
+    });
+    
+    svgEl.appendChild(group);
+    
+    const svgStr = svgEl.outerHTML;
+    const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `selection-${Date.now()}.svg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
 }
+

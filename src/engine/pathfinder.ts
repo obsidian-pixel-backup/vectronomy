@@ -1,6 +1,6 @@
 import paper from 'paper';
 
-export type BooleanOp = 'unite' | 'subtract' | 'intersect' | 'exclude';
+export type BooleanOp = 'unite' | 'subtract' | 'intersect' | 'exclude' | 'divide';
 
 export class Pathfinder {
   static init() {
@@ -8,6 +8,323 @@ export class Pathfinder {
       const canvas = document.createElement('canvas');
       paper.setup(canvas);
     }
+  }
+
+  static injectStencilBridges(svgs: string[], bridgeWidth: number): string | null {
+    this.init();
+    paper.project.clear();
+
+    const paths: paper.PathItem[] = [];
+    for (const svg of svgs) {
+      const item = paper.project.importSVG(svg, { expandShapes: true }) as paper.Item;
+      const path = this.findPath(item);
+      if (path) paths.push(path);
+    }
+
+    if (paths.length === 0) return null;
+
+    let united = paths[0];
+    for (let i = 1; i < paths.length; i++) {
+        united = united.unite(paths[i]) as paper.PathItem;
+    }
+
+    if (!(united instanceof paper.CompoundPath)) {
+        return `<svg xmlns="http://www.w3.org/2000/svg">${united.exportSVG({ asString: true })}</svg>`;
+    }
+
+    const holes: paper.Path[] = [];
+    let largestArea = 0;
+    for (const child of united.children) {
+       if (child instanceof paper.Path) {
+          const area = Math.abs((child as paper.Path).area);
+          if (area > largestArea) largestArea = area;
+       }
+    }
+    
+    const outerAreaSign = Math.sign((united.children[0] as paper.Path).area || 1);
+    for (const child of united.children) {
+       if (child instanceof paper.Path) {
+          if (Math.sign((child as paper.Path).area) !== outerAreaSign && Math.abs((child as paper.Path).area) < largestArea) {
+              holes.push(child as paper.Path);
+          }
+       }
+    }
+
+    let rectsToSubtract: paper.PathItem | null = null;
+
+    for (const hole of holes) {
+        let minDistance = Infinity;
+        let bestHolePt = hole.bounds.center;
+        let bestOuterPt = hole.bounds.center;
+
+        // Sample hole boundary
+        for (let i = 0; i < hole.length; i += 2) {
+            const pt = hole.getPointAt(i);
+            if (!pt) continue;
+            
+            for (const other of united.children) {
+               if (other === hole) continue;
+               if (other instanceof paper.Path) {
+                   const opt = other.getNearestPoint(pt);
+                   if (!opt) continue;
+                   const dist = pt.getDistance(opt);
+                   if (dist < minDistance) {
+                       minDistance = dist;
+                       bestHolePt = pt;
+                       bestOuterPt = opt;
+                   }
+               }
+            }
+        }
+        
+        if (minDistance === Infinity) continue;
+
+        const vec = bestOuterPt.subtract(bestHolePt);
+        const angle = vec.angle;
+        const length = vec.length;
+        
+        const mid = bestHolePt.add(vec.divide(2));
+        const bridgeRect = new paper.Path.Rectangle({
+            center: mid,
+            size: [length + bridgeWidth * 2, bridgeWidth]
+        });
+        bridgeRect.rotate(angle);
+        if (!rectsToSubtract) rectsToSubtract = bridgeRect;
+        else rectsToSubtract = rectsToSubtract.unite(bridgeRect) as paper.PathItem;
+    }
+
+    if (rectsToSubtract) {
+        united = united.subtract(rectsToSubtract) as paper.PathItem;
+    }
+    
+    if (!united || (typeof united.isEmpty === 'function' && united.isEmpty())) return `<svg></svg>`;
+    united.fillColor = new paper.Color(0, 0, 0, 1);
+    united.strokeColor = null;
+    const resultSvg = united.exportSVG({ asString: true }) as string;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
+  }
+
+  static async divideAll(svgs: string[]): Promise<string | null> {
+    this.init();
+    paper.project.clear();
+
+    const paths: paper.PathItem[] = [];
+    for (const svg of svgs) {
+      const item = paper.project.importSVG(svg, { expandShapes: true }) as paper.Item;
+      const path = this.findPath(item);
+      if (path) {
+        if (!path.fillColor) path.fillColor = new paper.Color(0, 0, 0, 1);
+        if (path instanceof paper.CompoundPath) {
+           for (const child of path.children) {
+               if (child instanceof paper.Path) child.closed = true;
+           }
+        } else if (path instanceof paper.Path) {
+           path.closed = true;
+        }
+        paths.push(path);
+      }
+    }
+
+    if (paths.length < 2) return null;
+
+    let result = paths[0];
+    let lastYield = performance.now();
+    for (let i = 1; i < paths.length; i++) {
+      // Chunked processing: yield to event loop every 16ms
+      if (performance.now() - lastYield > 16) {
+         await new Promise(resolve => setTimeout(resolve, 0));
+         lastYield = performance.now();
+      }
+      result = result.divide(paths[i]) as paper.PathItem;
+    }
+
+    if (!result || (typeof result.isEmpty === 'function' && result.isEmpty())) {
+      return `<svg></svg>`;
+    }
+
+    const resultSvg = result.exportSVG({ asString: true }) as string;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
+  }
+
+  static outlineStroke(svg: string, width: number, cap: string = 'round', join: string = 'round'): string | null {
+    this.init();
+    paper.project.clear();
+    const item = paper.project.importSVG(svg, { expandShapes: true }) as paper.Item;
+    const path = this.findPath(item);
+    if (!path) return null;
+    
+    let result = this.outlineItemStroke(path, width, cap, join);
+    if (!result) return null;
+    
+    result.fillColor = new paper.Color(0, 0, 0, 1);
+    result.strokeColor = null;
+    result.strokeWidth = 0;
+    
+    const resultSvg = result.exportSVG({ asString: true }) as string;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
+  }
+
+  static flattenPath(svg: string, tolerance: number): string | null {
+    this.init();
+    paper.project.clear();
+    const item = paper.project.importSVG(svg, { expandShapes: true }) as paper.Item;
+    let path = this.findPath(item);
+    if (!path) return null;
+    
+    const clone = path.clone({ insert: false }) as paper.PathItem;
+    clone.flatten(tolerance);
+    
+    const resultSvg = clone.exportSVG({ asString: true }) as string;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
+  }
+
+  static reversePath(svg: string): string | null {
+    this.init();
+    paper.project.clear();
+    const item = paper.project.importSVG(svg, { expandShapes: true }) as paper.Item;
+    let path = this.findPath(item);
+    if (!path) return null;
+    
+    if (path instanceof paper.CompoundPath) {
+        for (const child of path.children) {
+            if (child instanceof paper.Path) child.reverse();
+        }
+    } else if (path instanceof paper.Path) {
+        path.reverse();
+    }
+    
+    const resultSvg = path.exportSVG({ asString: true }) as string;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
+  }
+
+  static offsetPath(svg: string, offset: number, join: string = 'round'): string | null {
+    this.init();
+    paper.project.clear();
+    const item = paper.project.importSVG(svg, { expandShapes: true }) as paper.Item;
+    let path = this.findPath(item);
+    if (!path) return null;
+    
+    // Ensure the original path is closed for offsetting
+    if (path instanceof paper.CompoundPath) {
+        for (const child of path.children) {
+            if (child instanceof paper.Path) child.closed = true;
+        }
+    } else if (path instanceof paper.Path) {
+        path.closed = true;
+    }
+    path.fillColor = new paper.Color(0, 0, 0, 1);
+    
+    const width = Math.abs(offset) * 2;
+    const outline = this.outlineItemStroke(path, width, 'round', join);
+    
+    if (!outline) return null;
+    
+    let result: paper.PathItem;
+    if (offset > 0) {
+        result = path.unite(outline) as paper.PathItem;
+    } else {
+        result = path.subtract(outline) as paper.PathItem;
+    }
+    
+    if (!result || (typeof result.isEmpty === 'function' && result.isEmpty())) {
+        return `<svg></svg>`;
+    }
+    
+    result.fillColor = new paper.Color(0, 0, 0, 1);
+    result.strokeColor = null;
+    const resultSvg = result.exportSVG({ asString: true }) as string;
+    return `<svg xmlns="http://www.w3.org/2000/svg">${resultSvg}</svg>`;
+  }
+
+  private static outlineItemStroke(item: paper.PathItem, width: number, cap: string, join: string): paper.PathItem | null {
+    if (item instanceof paper.CompoundPath) {
+      let result: paper.PathItem | null = null;
+      for (const child of item.children) {
+         if (child instanceof paper.PathItem) {
+             const outline = this.outlineSinglePathStroke(child as paper.Path, width, cap, join);
+             if (outline) {
+                 if (!result) result = outline;
+                 else result = result.unite(outline) as paper.PathItem;
+             }
+         }
+      }
+      return result;
+    } else if (item instanceof paper.Path) {
+      return this.outlineSinglePathStroke(item, width, cap, join);
+    }
+    return null;
+  }
+
+  private static outlineSinglePathStroke(path: paper.Path, width: number, cap: string, join: string): paper.PathItem | null {
+    const flat = path.clone({ insert: false }) as paper.Path;
+    flat.flatten(0.25);
+    
+    const segments = flat.segments;
+    if (!segments || segments.length < 2) return null;
+
+    let outline: paper.PathItem | null = null;
+    const r = width / 2;
+    
+    for (let i = 0; i < segments.length; i++) {
+        const p1 = segments[i].point;
+        const nextIdx = i + 1;
+        if (nextIdx >= segments.length) {
+            if (!path.closed) break;
+        }
+        const p2 = segments[nextIdx % segments.length].point;
+        
+        const vec = p2.subtract(p1);
+        const length = vec.length;
+        if (length === 0) continue;
+        
+        const normal = new paper.Point(-vec.y, vec.x).normalize(r);
+        
+        const rect = new paper.Path({
+           segments: [
+               p1.add(normal),
+               p2.add(normal),
+               p2.subtract(normal),
+               p1.subtract(normal)
+           ],
+           closed: true,
+           insert: false
+        });
+        
+        if (!outline) outline = rect;
+        else outline = outline.unite(rect) as paper.PathItem;
+        
+        if (join === 'round') {
+            const circle = new paper.Path.Circle({
+                center: p2,
+                radius: r,
+                insert: false
+            });
+            outline = outline.unite(circle) as paper.PathItem;
+        } else if (join === 'bevel') {
+            // Bevel is implicitly created by not adding a joint shape 
+            // and letting the union handle the inner corner. 
+            // For the outer corner, union truncates it.
+        } else {
+            // Miter is complex, default to round for now
+            const circle = new paper.Path.Circle({
+                center: p2,
+                radius: r,
+                insert: false
+            });
+            outline = outline.unite(circle) as paper.PathItem;
+        }
+    }
+    
+    if (!path.closed && cap === 'round') {
+        const c1 = new paper.Path.Circle({ center: segments[0].point, radius: r, insert: false });
+        const c2 = new paper.Path.Circle({ center: segments[segments.length-1].point, radius: r, insert: false });
+        if (outline) {
+            outline = outline.unite(c1) as paper.PathItem;
+            outline = outline.unite(c2) as paper.PathItem;
+        }
+    }
+    
+    return outline;
   }
 
   /**
@@ -65,6 +382,9 @@ export class Pathfinder {
         break;
       case 'exclude':
         result = path1.exclude(path2);
+        break;
+      case 'divide':
+        result = path1.divide(path2);
         break;
     }
 

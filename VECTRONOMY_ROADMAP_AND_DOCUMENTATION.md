@@ -1,7 +1,7 @@
 # 🌌 VECTRONOMY: MASTER PLAN, ROADMAP & DOCUMENTATION LIBRARY
 ### 📋 Professional 100-Feature Industrial CAD Upgrade Blueprint
 
-This document represents the master architectural plan and exhaustive feature roadmap for **VECTRONOMY**. It maps out **100 key features, tools, and technical upgrades** designed to elevate VECTRONOMY from a high-fidelity editor into an industry-leading competitor to **Adobe Illustrator**, **LightBurn**, and **xTool Creative Space (XCS)**.
+This document represents the master architectural plan and exhaustive feature roadmap for **VECTRONOMY**. It maps out **100 key features, tools, and technical upgrades** designed to elevate VECTRONOMY from a high-fidelity editor into an industry-leading professional vector graphics editor and laser cutting control software.
 
 ---
 
@@ -27,13 +27,13 @@ graph TD
 
 ---
 
-### 📐 Division 1: Vector Drawing & Geometry Creation (Illustrator-Grade)
+### 📐 Division 1: Vector Drawing & Geometry Creation (Professional-Grade)
 
 These tools provide the foundational drawing controls necessary to draft clean, mathematically precise vector shapes.
 
 1. ✅ [SHIPPED] **Pen Tool (Bezier Plotting)**
     *   *Technical Integration*: Implement custom click-and-drag listener states updating Paper.js `Path` and `Segment` handles in real-time.
-    *   *Market Value*: Provides core illustrator capability to trace and compose bespoke, custom-tailored curves.
+    *   *Market Value*: Provides core capability to trace and compose bespoke, custom-tailored curves.
 2. ✅ [SHIPPED] **Parametric Rectangle Tool**
     *   *Technical Integration*: Utilize `Path.Rectangle` paired with holding down `Shift` constraints to lock 1:1 aspect ratio squares.
     *   *Market Value*: Fundamental shape creation, perfect for backing sheets and mounting frames.
@@ -77,7 +77,7 @@ To modify existing paths with micro-precision down to individual bezier control 
 13. ✅ [SHIPPED] **Node Corner-Convert (Handle Splitter)**
     *   *Technical Integration*: Toggle `segment.linear` properties or mathematically split handles to break their straight-line link.
     *   *Market Value*: Instantly converts a smooth wave peak into a sharp, pointed crest.
-14. **Direct Handle Snapping**
+14. ✅ [SHIPPED] **Direct Handle Snapping**
     *   *Technical Integration*: Force handle vectors to snap to vertical ($90^\circ$) and horizontal ($0^\circ$) axes when within a $5^\circ$ threshold.
     *   *Market Value*: Essential for creating perfectly symmetrical organic curves.
 15. ✅ [SHIPPED] **Inline Anchor Insertion Tool**
@@ -86,16 +86,16 @@ To modify existing paths with micro-precision down to individual bezier control 
 16. ✅ [SHIPPED] **Structural Anchor Node Deletion**
     *   *Technical Integration*: Delete selected segment indices and mathematically recalculate the surrounding curve segments to seal the path.
     *   *Market Value*: Cleans up and simplifies over-complicated vector geometries.
-17. **Node Align Tool (Matrix Alignment)**
+17. ✅ [SHIPPED] **Node Align Tool (Matrix Alignment)**
     *   *Technical Integration*: Force selected anchor coordinates ($x$ or $y$) to match a specific line or bounding boundary.
     *   *Market Value*: Standard tool for drafting perfectly straight edges inside complex hand-drawn paths.
-18. **Segment Scissors (Scissors Tool)**
+18. ✅ [SHIPPED] **Segment Scissors (Scissors Tool)**
     *   *Technical Integration*: Cut an active path segment at a clicked coordinates, creating two distinct open endpoints.
     *   *Market Value*: Crucial for editing intricate nested outlines.
-19. **Open Endpoint Joining**
+19. ✅ [SHIPPED] **Open Endpoint Joining**
     *   *Technical Integration*: Detect close open endpoints ($d < 5\text{ px}$) and merge them into a single continuous path segment.
     *   *Market Value*: Heals broken or poorly exported CAD vectors before fabrication.
-20. **Close Path Toggle**
+20. ✅ [SHIPPED] **Close Path Toggle**
     *   *Technical Integration*: Draw a closing line between the start and end nodes of an open path.
     *   *Market Value*: Instantly prepares raw outlines for solid filling or pocket milling operations.
 
@@ -117,59 +117,59 @@ The mathematical logic core to perform complex constructive area geometry.
 24. ✅ [SHIPPED] **Exclude (Boolean XOR)**
     *   *Technical Integration*: Call Paper.js `path.exclude(otherPath)`.
     *   *Market Value*: Instantly creates hollow frames or transparent stencil layouts.
-25. **Divide (Path Flattening)**
+25. ✅ [SHIPPED] **Divide (Path Flattening)**
     *   *Technical Integration*: Run area intersection sweeps, splitting all overlapping paths at their intersection boundaries.
     *   *Market Value*: Necessary for mosaic crafting and complex multi-layered color work.
-26. **Stroke-to-Path Converter (Outline Stroke)**
+26. ✅ [SHIPPED] **Stroke-to-Path Converter (Outline Stroke)**
     *   *Technical Integration*: Calculate outline boundaries based on stroke width, cap, and join settings to generate a closed compound path.
     *   *Market Value*: Crucial for laser engraving outlines: lasers follow lines, so a thick stroke must be converted to a shape to cut the outline.
-27. **Contour Offset Engine (Kerf & Expansion)**
+27. ✅ [SHIPPED] **Contour Offset Engine (Kerf & Expansion)**
     *   *Technical Integration*: Implement offsetting algorithms to draw expanded/contracted outer paths.
     *   *Market Value*: Core to making offsets, thick borders, and laser cut boundaries.
 28. ✅ [SHIPPED] **Douglas-Peucker Simplification Solver**
     *   *Technical Integration*: Use native `path.simplify(tolerance)` to reduce node weight based on curve delta calculations.
     *   *Market Value*: Reduces G-code file sizes and prevents machinery jitter.
-29. **Bezier Flattening (Curve-to-Line)**
+29. ✅ [SHIPPED] **Bezier Flattening (Curve-to-Line)**
     *   *Technical Integration*: Convert bezier curves into fine-resolution straight line segments (`path.flatten(maxDistance)`).
     *   *Market Value*: Essential compatibility patch for older CNC machines that do not interpret standard bezier arcs.
-30. **Path Direction Reversal**
+30. ✅ [SHIPPED] **Path Direction Reversal**
     *   *Technical Integration*: Reverse the node sequence index (`path.reverse()`) to invert clockwise/counter-clockwise winding.
     *   *Market Value*: Critical for G-code pocket generators to determine inner vs outer boundaries correctly.
 
 ---
 
-### 🔌 Division 4: Laser Cutting & Engraving Parameters (LightBurn/XCS-Grade)
+### 🔌 Division 4: Laser Cutting & Engraving Parameters (Professional-Grade)
 
 Specific settings designed to optimize project outcomes for laser cutters (CO2, Diode, and Fiber).
 
-31. **Friction-Fit Kerf Compensator**
+31. ✅ [SHIPPED] **Friction-Fit Kerf Compensator**
     *   *Technical Integration*: Run automated offset paths (outwards for cuts, inwards for holes) matching laser beam width ($0.08 - 0.2\text{ mm}$).
     *   *Market Value*: Enables precise wood and acrylic puzzles, boxes, and interlocking mechanical joints.
-32. **Burn-Preventing Lead-in / Lead-out**
+32. ✅ [SHIPPED] **Burn-Preventing Lead-in / Lead-out**
     *   *Technical Integration*: Inject a tiny straight or curved lead-in line at the start of a cut path, shifting the initial pierce mark outside the final design.
     *   *Market Value*: Avoids puncture burn marks on premium woods and metals.
-33. **Micro-Joint Tab Placer**
+33. ✅ [SHIPPED] **Micro-Joint Tab Placer**
     *   *Technical Integration*: Automatically split a path, inserting tiny un-cut gaps ($0.2 - 0.8\text{ mm}$) along the border.
     *   *Market Value*: Keeps small parts from falling through honeycomb beds or shifting mid-cut.
-34. **Inner-First Cut Sorter**
+34. ✅ [SHIPPED] **Inner-First Cut Sorter**
     *   *Technical Integration*: Perform area overlap containment checks; assign higher cutting priorities to fully enclosed nested shapes.
     *   *Market Value*: Guarantees nested detail parts are cut *before* the outer outline detaches the stock from the sheet.
-35. **TSP (Traveling Salesperson) Router**
+35. ✅ [SHIPPED] **TSP (Traveling Salesperson) Router**
     *   *Technical Integration*: Implement a fast nearest-neighbor or 2-opt search heuristic to minimize travel distance between independent cuts.
     *   *Market Value*: Saves up to 40% of laser operational times by optimizing head transit paths.
-36. **Acrylic Overcut Compensator**
+36. ✅ [SHIPPED] **Acrylic Overcut Compensator**
     *   *Technical Integration*: Extend the laser cut trajectory $X\text{ mm}$ past the closing node to guarantee full penetration.
     *   *Market Value*: Prevents thick materials from snagging at start/stop points.
-37. **Color-Operational Mapping**
+37. ✅ [SHIPPED] **Color-Operational Mapping**
     *   *Technical Integration*: Bind stroke/fill hex codes to laser command modes (Cut, Score, Raster Engrave).
     *   *Market Value*: Seamless standard laser operation workflow directly from design files.
-38. **Thermal Power Ramping**
+38. ✅ [SHIPPED] **Thermal Power Ramping**
     *   *Technical Integration*: Dynamically ramp laser power up at acceleration and down during deceleration corners.
     *   *Market Value*: Prevents excessive charring on corners and sharp bends.
-39. **Dashed Perforation Generator**
+39. ✅ [SHIPPED] **Dashed Perforation Generator**
     *   *Technical Integration*: Convert standard lines into segmented cut-and-gap sequences based on user ratios.
     *   *Market Value*: Perfect for designing folding cardboard, sheet metal bends, and custom tear-away tickets.
-40. **Multi-Pass Depth Controller**
+40. ✅ [SHIPPED] **Multi-Pass Depth Controller**
     *   *Technical Integration*: Parameterize SVG export to output multiple identical passes for specific vector layers.
     *   *Market Value*: Enables deep cutting in hard woods without charring, by running multiple shallow passes.
 
@@ -179,34 +179,35 @@ Specific settings designed to optimize project outcomes for laser cutters (CO2, 
 
 Advanced parameter configurations tailored for computer-numerical-control milling machinery.
 
-41. **CNC Bit Offset Compensator**
+41. ✅ [SHIPPED] **CNC Bit Offset Compensator**
     *   *Technical Integration*: Offset G-code paths by the router bit radius to maintain dimensional accuracy.
     *   *Market Value*: Crucial for mechanical structural assemblies milled on wood or aluminum CNC routers.
-42. **Pocket Hatch Generator**
+42. ✅ [SHIPPED] **Pocket Hatch Generator**
     *   *Technical Integration*: Compute offset contours and linear fill patterns to empty interior pockets down to a specific depth.
     *   *Market Value*: Essential for milling signs, carving cavities, and machining mechanical parts.
-43. **3D Chamfering & V-Groove Calculator**
+43. ✅ [SHIPPED] **3D Chamfering & V-Groove Calculator**
     *   *Technical Integration*: Calculate progressive depth coordinates based on bit angle for sloped edges.
     *   *Market Value*: Produces professional beveled borders on wood projects.
-44. **Drilling / Boring Operations Handler**
+44. ✅ [SHIPPED] **Drilling / Boring Operations Handler**
     *   *Technical Integration*: Scan for circular paths; replace coordinate loops with simple vertical Z-axis drilling drops.
     *   *Market Value*: Dramatically speeds up G-code parsing for mounting plate screw holes.
-45. **V-Carving Path Solver**
+45. ✅ [SHIPPED] **V-Carving Path Solver**
     *   *Technical Integration*: Calculate variable depth (Z-height) based on the distance between dual border vectors for a angled V-bit.
     *   *Market Value*: Enables beautiful, traditional 3D chiseled wood signs and lettering.
-46. **Milling Holding Tabs**
+46. ✅ [SHIPPED] **Milling Holding Tabs**
     *   *Technical Integration*: Generate thick physical connection tabs to keep wood and metal stock firmly attached to the frame.
     *   *Market Value*: Standard safety safety requirement for high-vibration CNC setups.
-47. **Feed and Plunge Rate Ingress**
+47. ✅ [SHIPPED] **Feed and Plunge Rate Ingress**
     *   *Technical Integration*: Map XY cutting speeds (Feed Rate) and Z entry speeds (Plunge Rate) directly to SVG metadata tags.
     *   *Market Value*: Eliminates manual speed overrides inside CNC controller software.
-48. **Raster Concentric Hatching**
+48. ✅ [SHIPPED] **Raster Concentric Hatching**
+    *   *Technical Integration*: Generate spiraling concentric offset contours inside shapes to machine pockets smoothly.
     *   *Technical Integration*: Generate spiraling concentric offset contours inside shapes to machine pockets smoothly.
     *   *Market Value*: Reduces wood tearing and prolongs router bit life.
-49. **Stepover Overlap Configurator**
+49. ✅ [SHIPPED] **Stepover Overlap Configurator**
     *   *Technical Integration*: Parameterize the cutter step distance overlap (usually 40% - 80% of tool width) for surface sweeps.
     *   *Market Value*: Allows balancing speed against final surface finish smoothness.
-50. **Safe Retract Z-Height Guard**
+50. ✅ [SHIPPED] **Safe Retract Z-Height Guard**
     *   *Technical Integration*: Configure a clear retraction height for travel transit movements.
     *   *Market Value*: Ensures the spindle tool retracts high enough to clear uneven boards or clamps.
 
@@ -216,34 +217,34 @@ Advanced parameter configurations tailored for computer-numerical-control millin
 
 Interface overlays and math utilities to establish perfect dimensional accuracy in the workspace.
 
-51. **Dynamic Layout Rulers**
+51. ✅ [SHIPPED] **Dynamic Layout Rulers**
     *   *Technical Integration*: Render responsive SVG/Canvas ruler coordinates with tracking guidelines tied to cursor movement.
     *   *Market Value*: Standard visual layout standard for engineers and woodworkers.
-52. **Drag-and-Drop Guidelines**
+52. ✅ [SHIPPED] **Drag-and-Drop Guidelines**
     *   *Technical Integration*: Pull horizontal or vertical guide corridors directly out from the rulers and place them on the canvas.
     *   *Market Value*: Aids in aligning text, borders, and margins across complex layouts.
-53. **Grid Subdivisions Manager**
+53. ✅ [SHIPPED] **Grid Subdivisions Manager**
     *   *Technical Integration*: Draw coordinate grids featuring major/minor subdivisions, toggleable between Metric and Imperial.
     *   *Market Value*: Speeds up design layout calculations.
-54. **Snap to Grid**
+54. ✅ [SHIPPED] **Snap to Grid**
     *   *Technical Integration*: Round coordinate inputs to the nearest active grid intersection value.
     *   *Market Value*: Accelerates drafting by ensuring shapes lock to exact dimensions.
-55. **Snap to Paths & Tangents**
+55. ✅ [SHIPPED] **Snap to Paths & Tangents**
     *   *Technical Integration*: Query vector paths to detect nearest edge intersections, corners, or tangents within a pixel threshold.
     *   *Market Value*: Essential for placing new parts exactly touching or centered on existing lines.
-56. **Centroid Alignment Tracker**
+56. ✅ [SHIPPED] **Centroid Alignment Tracker**
     *   *Technical Integration*: Calculate path geometric centers and display vertical/horizontal alignment guides when aligning centroids.
     *   *Market Value*: Standard tool for clean, centered typographic and vector layouts.
-57. **High-Precision Numerical Inspector**
+57. ✅ [SHIPPED] **High-Precision Numerical Inspector**
     *   *Technical Integration*: High-fidelity side inputs showing absolute properties: X, Y, Width, Height, and Rotation.
     *   *Market Value*: Lets professional designers key in exact sizes down to thousands of a millimeter.
-58. **Relative/Incremental Move Tool**
+58. ✅ [SHIPPED] **Relative/Incremental Move Tool**
     *   *Technical Integration*: Input values to move an element relative to its current coordinate position.
     *   *Market Value*: Simplifies repetitive alignment offsets.
 59. ✅ [SHIPPED] **Precision Keyboard Nudges**
     *   *Technical Integration*: Bind Arrow keys to adjust selected coordinates by customizable increments (e.g. $0.1\text{ mm}$ or $1\text{ mm}$).
     *   *Market Value*: Speeds up micro-position adjustments.
-60. **Canvas Pivot-Point Tool**
+60. ✅ [SHIPPED] **Canvas Pivot-Point Tool**
     *   *Technical Integration*: Allow moving the origin coordinates of rotation, scaling, and shear actions to any point.
     *   *Market Value*: Essential for complex rotative alignments (e.g. arranging spokes around a wheel).
 
@@ -253,31 +254,31 @@ Interface overlays and math utilities to establish perfect dimensional accuracy 
 
 For importing and converting physical hand-drawn artwork, photos, or logos into crisp paths.
 
-61. **Image Drop Target Handler**
+61. ✅ [SHIPPED] **Image Drop Target Handler**
     *   *Technical Integration*: Drag-and-drop file listener that reads image files as Data URLs and renders them inside the canvas layer.
     *   *Market Value*: Convenient workflow entry point for starting projects with physical artwork.
-62. **Client-Side Image Auto-Tracing (Potrace)**
+62. ✅ [SHIPPED] **Client-Side Image Auto-Tracing (Potrace)**
     *   *Technical Integration*: Process image pixels into a binary matrix and trace contours to create smooth bezier coordinates.
-    *   *Market Value*: Standard feature in Illustrator and LightBurn, saving users from manually tracing logos.
-63. **Interactive Threshold Slider**
+    *   *Market Value*: Standard feature in professional vector software, saving users from manually tracing logos.
+63. ✅ [SHIPPED] **Interactive Threshold Slider**
     *   *Technical Integration*: Canvas threshold filter to preview black-and-white vector limits before executing trace.
     *   *Market Value*: Lets users adjust contrast to capture fine lines from pencil sketches.
-64. **Color Isolation Tracing**
+64. ✅ [SHIPPED] **Color Isolation Tracing**
     *   *Technical Integration*: Group image pixels by color similarity and trace each group to a separate layer.
     *   *Market Value*: Converts multi-colored logos into clean, color-separated layers for cutting.
-65. **Noise Reduction Speckle Filter**
+65. ✅ [SHIPPED] **Noise Reduction Speckle Filter**
     *   *Technical Integration*: Filter out pixel clusters smaller than a configured size threshold during binarization.
     *   *Market Value*: Cleans up dirty, grainy scans automatically.
-66. **Smoothness Corner Thresholding**
+66. ✅ [SHIPPED] **Smoothness Corner Thresholding**
     *   *Technical Integration*: Parameterize the tracing curve-fitting tolerance to adjust corner sharpness.
     *   *Market Value*: Retains organic hand-drawn details or outputs clean, sharp modern lines.
-67. **Centerline Tracing Engine**
+67. ✅ [SHIPPED] **Centerline Tracing Engine**
     *   *Technical Integration*: Trace the thin centerlines of drawings, outputting single strokes instead of thick outline blocks.
     *   *Market Value*: Essential for engraving handwritten signatures, signatures, or clean sketch outlines.
 68. ✅ [SHIPPED] **Background Chroma-Key & Alpha Eraser**
     *   *Technical Integration*: Flood-fill alpha thresholding to clear background colors before vectorization.
     *   *Market Value*: Saves time spent prepping logos in external photo editors.
-69. **Raster Halftoning Engraver**
+69. ✅ [SHIPPED] **Raster Halftoning Engraver**
     *   *Technical Integration*: Convert grayscale image pixels into array patterns of dots of varying sizes.
     *   *Market Value*: Enables engraving photographic portraits directly onto slate, wood, or acrylic.
 70. ✅ [SHIPPED] **Contrast pre-filters**
@@ -290,34 +291,34 @@ For importing and converting physical hand-drawn artwork, photos, or logos into 
 
 Advanced text tools to design layouts directly on the canvas without converting elsewhere.
 
-71. **Multi-font Typography Engine**
+71. ✅ [SHIPPED] **Multi-font Typography Engine**
     *   *Technical Integration*: Native font rendering systems inside the Canvas; load and display font families cleanly.
     *   *Market Value*: Essential for custom signage, personalized wedding plates, and plaque designs.
-72. **Convert Text to Path (Outlining)**
+72. ✅ [SHIPPED] **Convert Text to Path (Outlining)**
     *   *Technical Integration*: Call `path.outlines()` or load `.ttf` geometries to convert text strings to standard bezier lines.
     *   *Market Value*: Translates typographic text into cut-ready physical vector outlines.
-73. **Text Kerning & Tracking Adjuster**
+73. ✅ [SHIPPED] **Text Kerning & Tracking Adjuster**
     *   *Technical Integration*: Granular spacing control between individual characters and lines.
     *   *Market Value*: Critical for dialing in clean typographic logo designs.
-74. **Paragraph Alignment Controls**
+74. ✅ [SHIPPED] **Paragraph Alignment Controls**
     *   *Technical Integration*: Support for standard alignment anchors: Left, Right, Center, and Justified.
     *   *Market Value*: Simplifies complex product specifications blocks or name plaques.
-75. **Drag-and-Drop Font Loader**
+75. ✅ [SHIPPED] **Drag-and-Drop Font Loader**
     *   *Technical Integration*: Load custom TrueType (`.ttf`) and OpenType (`.otf`) files via drag-and-drop.
     *   *Market Value*: Lets users use proprietary branding fonts directly without installing them on the system.
-76. **Circular Path Warp**
+76. ✅ [SHIPPED] **Circular Path Warp**
     *   *Technical Integration*: Calculate text position offsets along circular circumference lines.
     *   *Market Value*: Standard tool for designing circular logos and seals.
-77. **Text Along Arbitrary Curves**
+77. ✅ [SHIPPED] **Text Along Arbitrary Curves**
     *   *Technical Integration*: Map text character baselines to the points along an arbitrary bezier curve.
     *   *Market Value*: Enables wave-like, flowing decorative typographic designs.
-88. **Vertical Typographic Mode**
+88. ✅ [SHIPPED] **Vertical Typographic Mode**
     *   *Technical Integration*: Arrange text layout grids vertically.
     *   *Market Value*: Essential for traditional East Asian vertical sign engraving.
-79. **Stencil Bridge Injector**
+79. ✅ [SHIPPED] **Stencil Bridge Injector**
     *   *Technical Integration*: Automatically detect closed loops inside letters (like O, A, D, B, P) and slice connection gaps into them.
     *   *Market Value*: Prevents interior letter centers from falling out when cutting sheet stencils.
-80. **Variable Serialization Tracker**
+80. ✅ [SHIPPED] **Variable Serialization Tracker**
     *   *Technical Integration*: Automated variables (e.g. `{date}`, `{serial}`) that update dynamically.
     *   *Market Value*: Essential for manufacturing serial number tags and industrial labels.
 
@@ -327,31 +328,31 @@ Advanced text tools to design layouts directly on the canvas without converting 
 
 For maintaining full design organization inside highly complex drawings.
 
-81. **Nested Layer Tree Panel**
+81. ✅ [SHIPPED] **Nested Layer Tree Panel**
     *   *Technical Integration*: Build a collapsible list panel displaying layers, subgroups, and paths.
     *   *Market Value*: Lets users manage hundreds of paths on highly complex vector templates.
-82. **Layer Lock Toggle**
+82. ✅ [SHIPPED] **Layer Lock Toggle**
     *   *Technical Integration*: Toggle non-interactive states on elements to prevent accidental selections.
     *   *Market Value*: Saves time by locking background borders so you can edit interior details safely.
-83. **Color-Coded Layers**
+83. ✅ [SHIPPED] **Color-Coded Layers**
     *   *Technical Integration*: Assign distinct sidebar highlight colors to different layers, matching their canvas outlines.
-    *   *Market Value*: Standard workspace layout organization found in Illustrator and AutoCAD.
-84. **Group / Ungroup**
+    *   *Market Value*: Standard workspace layout organization found in professional CAD software.
+84. ✅ [SHIPPED] **Group / Ungroup**
     *   *Technical Integration*: Create Paper.js `Group` structures, moving children collectively as one entity.
     *   *Market Value*: Keeps compound parts together during complex layout changes.
-85. **Depth Reordering (Z-Index)**
+85. ✅ [SHIPPED] **Depth Reordering (Z-Index)**
     *   *Technical Integration*: Shift elements forward or backward within their layer folder.
     *   *Market Value*: Essential for overlapping vector shapes and solid-fill layouts.
-86. **Layer Merging**
+86. ✅ [SHIPPED] **Layer Merging**
     *   *Technical Integration*: Collapse selected layers together into a single layer folder.
     *   *Market Value*: Cleans up workspace organization before exporting.
-87. **Group Isolation Mode**
+87. ✅ [SHIPPED] **Group Isolation Mode**
     *   *Technical Integration*: Double-click a group to focus strictly on editing its contents, locking all other elements.
     *   *Market Value*: Standard tool for editing complex assemblies without disrupting outer elements.
-88. **Asset Symbols Library**
+88. ✅ [SHIPPED] **Asset Symbols Library**
     *   *Technical Integration*: Instantiate reusable template shapes (Symbols) linked to a master parent element.
     *   *Market Value*: Updating a single master parent shape instantly updates all cloned symbols across the design.
-89. **Selection Batch Exporter**
+89. ✅ [SHIPPED] **Selection Batch Exporter**
     *   *Technical Integration*: Select specific elements and export them directly to separate files.
     *   *Market Value*: Saves time spent manually separating parts into multiple files.
 90. **Import Hierarchy Preservation**
@@ -360,7 +361,7 @@ For maintaining full design organization inside highly complex drawings.
 
 ---
 
-### 💻 Division 10: App Architecture, PWA, Cloud, & Performance Polish
+### 💻 Division 10: App Architecture, PWA, & Performance Polish
 
 To establish an industrial-grade workspace environment that runs at peak performance.
 
@@ -370,27 +371,26 @@ To establish an industrial-grade workspace environment that runs at peak perform
 92. ✅ [SHIPPED] **Installable PWA Offline Support**
     *   *Technical Integration*: Implement custom service workers and manifest files for local caching.
     *   *Market Value*: Allows fabricators to run the editor offline directly in workshop computers without internet.
-93. **Web Worker Math Offloading**
+93. ✅ [SHIPPED] **Web Worker Math Offloading**
     *   *Technical Integration*: Offload CPU-heavy calculations (Boolean math, Potrace tracing, TSP path routing) to Web Workers.
     *   *Market Value*: Keeps the UI fluid and responsive even during heavy background operations.
 94. ✅ [SHIPPED] **Automated IndexedDB Session Auto-Save**
     *   *Technical Integration*: Silently back up the current workspace state to IndexedDB every 30 seconds.
     *   *Market Value*: Saves hours of work from sudden power cuts, battery drain, or tab crashes.
-95. **G-Code Cutting Simulator**
+95. ✅ [SHIPPED] **G-Code Cutting Simulator**
     *   *Technical Integration*: Render a simulated laser head showing the exact path the laser nozzle or milling bit will take.
     *   *Market Value*: Prevents mistakes by letting users review the cutting process before running the machine.
 96. ✅ [SHIPPED] **Vercel Telemetry Integration**
     *   *Technical Integration*: Dynamic, warning-free script injection to log user analytics.
     *   *Market Value*: Provides anonymous usage metrics to help optimize the application.
+    *   *Technical Integration*: Dynamic, warning-free script injection to log user analytics.
+    *   *Market Value*: Provides anonymous usage metrics to help optimize the application.
 97. ✅ [SHIPPED] **SVG Live Code Synchronization**
     *   *Technical Integration*: Synced code panel displaying live, updating XML code alongside the canvas.
     *   *Market Value*: Ideal for developers who want to copy clean SVG code directly from their edits.
-98. **Custom Hotkey Configurator**
+98. ✅ [SHIPPED] **Custom Hotkey Configurator**
     *   *Technical Integration*: Custom shortcut-binding panel mapping keyboard triggers.
-    *   *Market Value*: Lets users map keyboard shortcuts to match their favorite software (e.g. Illustrator or AutoCAD).
-99. **Cloud Sync Template Library**
-    *   *Technical Integration*: Secure authentication system to back up vector templates in the cloud.
-    *   *Market Value*: Allows users to sync their custom design library across multiple workshop machines.
+    *   *Market Value*: Lets users map keyboard shortcuts to match their favorite professional software.
 100. ✅ [SHIPPED] **High-DPI Retina Rendering**
     *   *Technical Integration*: Dynamic pixel ratio canvas scaling.
     *   *Market Value*: Guarantees crisp, sharp vector lines on premium high-density 4K displays.
@@ -457,7 +457,7 @@ graph TD
 
 ### 🚀 10 AI-Powered Features & Tools
 
-101. **Natural Language Text-to-CAD (Prompt-to-Vector)**
+101. ✅ [SHIPPED] **Natural Language Text-to-CAD (Prompt-to-Vector)**
      *   *Technical Integration*: Ingest user prompts ("draw a star with 8 points and a radius of 50mm") inside the panel. WebLLM processes the prompt and outputs structured Paper.js drawing command calls, rendering the geometry on the canvas instantly.
      *   *Market Value*: Demolishes the CAD learning curve, letting beginners draft precision parts using plain language.
 102. **Semantic SVG Parser & Group Healer**
@@ -589,7 +589,7 @@ To deliver a world-class workspace experience, VECTRONOMY prioritizes frictionle
 
 131. ✅ [SHIPPED] **Vectronomy Workspace Packer (.vectronomy Project File)**
      *   *Technical Integration*: Package the canvas state, layer trees, custom material profiles, and undo logs into a structured JSON string, saving it locally as a `.vectronomy` project file.
-     *   *Market Value*: Lets users save their design work as editable project files, just like Adobe's `.ai` or LightBurn's `.lbrn` files.
+     *   *Market Value*: Lets users save their design work as editable project files, just like industry-standard vector formats.
 132. ✅ [SHIPPED] **Responsive Slide-out Hamburger Menu**
      *   *Technical Integration*: Build an off-canvas slide-out sidebar navigation element mapped to active CSS classes and transition states.
      *   *Market Value*: Maximizes direct drawing screen real-estate, especially on tablets and smaller workshop monitors.
@@ -615,39 +615,6 @@ To deliver a world-class workspace experience, VECTRONOMY prioritizes frictionle
      *   *Technical Integration*: Toggleable grid overlays with custom color opacity, major lines, and sub-line limits.
      *   *Market Value*: Helps designers adjust grid visibility based on visual comfort and drawing detail density.
 140. **Integrated Developer Feedback & Bug Reporter**
-     *   *Technical Integration*: In-app feedback form that automatically bundles anonymous system specs (browser, WebGPU status) for fast debugging.
-     *   *Market Value*: Keeps developers in close contact with active workshop feedback for rapid bug fixing.
-
----
-
-## 🛠️ RECOMMENDED DEVELOPMENT PHASES
-
-To roll out these features systematically, we suggest the following seven phases:
-
-### Phase 1: Project Management & User Interface (Weeks 1-3)
-Focus on core UI structures, custom project loading/saving, settings panels, and hamburger navigations:
-*   Features: 131, 132, 133, 134, 135, 136, 138, 139, 92, 94.
-*   Goal: Establish a premium, highly responsive user interface with robust project management controls.
-
-### 🚧 [IN PROGRESS] Phase 2: Core Geometry & CAD Precision (Weeks 4-6)
-Focus on essential drawing capability, precise alignments, and basic G-code output logic:
-*   Features: 1, 11, 12, 13, 21, 22, 23, 27, 31, 51, 52, 54, 55, 57, 81, 84, 91.
-*   Goal: Establish VECTRONOMY as a highly accurate, fully capable vector editor.
-
-### Phase 3: Fabrication Automation & Tracing (Weeks 7-9)
-Focus on industry-specific toolpath optimization, PWA capabilities, and image vectorization:
-*   Features: 26, 28, 32, 33, 34, 35, 61, 62, 63, 67, 71, 72, 79.
-*   Goal: Enable full offline utility and automated preparation of artwork for cutting.
-
-### Phase 4: Advanced CAD Features (Weeks 10-12)
-Focus on specialized tools, G-code simulations, and cloud integration:
-*   Features: 5, 6, 10, 29, 38, 41, 42, 45, 76, 77, 95, 98, 99, 100.
-*   Goal: Deliver deep competitive features to rival established desktop software.
-
-### Phase 5: Local WebGPU Inference Model (Weeks 13-15)
-Focus on WebGPU local AI integration, natural language commands, and automatic design optimization:
-*   Features: 101, 102, 103, 104, 105, 106, 107, 108, 109, 110.
-*   Goal: Establish VECTRONOMY as the world's first local, AI-powered design-to-fabrication workspace.
 
 ### Phase 6: 3D Extrusion & WebGL Assembly (Weeks 16-18)
 Focus on Three.js 3D viewport, panel extrusions, joint collision checks, and exploded assembly models:

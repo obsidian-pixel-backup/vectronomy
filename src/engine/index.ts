@@ -24,6 +24,9 @@ export { SceneGraph } from './sceneGraph';
 export { VectorFactory, parseColor, resolveStyle } from './vectorFactory';
 export { OutputCompiler } from './outputCompiler';
 export { PathHealer } from './pathHealer';
+export { PrecisionEngine } from './precision';
+export { SimulationEngine } from './simulation';
+export type { Guideline, PrecisionOptions } from './precision';
 export type * from './types';
 
 import { FileParser } from './fileParser';
