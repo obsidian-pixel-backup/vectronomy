@@ -1228,7 +1228,22 @@ export class VectorEditor {
     this.renderSelectionUI(); this.commit();
   }
 
-  // ── Align ─────────────────────────────────────────────────────
+  private areElementsAligned(mode: string, els: SVGGraphicsElement[]): boolean {
+    if (els.length <= 1) return true;
+    const firstBox = this.getTransformedBBox(els[0]);
+    for (let i = 1; i < els.length; i++) {
+      const box = this.getTransformedBBox(els[i]);
+      switch (mode) {
+        case 'left': if (Math.abs(box.x - firstBox.x) > 1) return false; break;
+        case 'center-h': if (Math.abs((box.x + box.width / 2) - (firstBox.x + firstBox.width / 2)) > 1) return false; break;
+        case 'right': if (Math.abs((box.x + box.width) - (firstBox.x + firstBox.width)) > 1) return false; break;
+        case 'top': if (Math.abs(box.y - firstBox.y) > 1) return false; break;
+        case 'center-v': if (Math.abs((box.y + box.height / 2) - (firstBox.y + firstBox.height / 2)) > 1) return false; break;
+        case 'bottom': if (Math.abs((box.y + box.height) - (firstBox.y + firstBox.height)) > 1) return false; break;
+      }
+    }
+    return true;
+  }
 
   alignTo(mode: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom') {
     const els = this.getSelectedEls();
@@ -1236,26 +1251,46 @@ export class VectorEditor {
     const mainSvg = this.container.querySelector('svg') as SVGSVGElement | null;
     if (!mainSvg) return;
 
-    const vb = mainSvg.viewBox.baseVal;
-    // Fallback if no viewBox is present
-    const canvasW = vb?.width || mainSvg.clientWidth;
-    const canvasH = vb?.height || mainSvg.clientHeight;
-    const canvasX = vb?.x || 0;
-    const canvasY = vb?.y || 0;
+    const alignedToEachOther = this.areElementsAligned(mode, els);
 
-    const tBox = this.getUnionBBox(els);
-    let dx = 0, dy = 0;
+    if (!alignedToEachOther) {
+      const uBox = this.getUnionBBox(els);
+      els.forEach(el => {
+        const tBox = this.getTransformedBBox(el);
+        let dx = 0, dy = 0;
+        switch (mode) {
+          case 'left':     dx = uBox.x - tBox.x; break;
+          case 'center-h': dx = (uBox.x + uBox.width / 2) - (tBox.x + tBox.width / 2); break;
+          case 'right':    dx = (uBox.x + uBox.width) - (tBox.x + tBox.width); break;
+          case 'top':      dy = uBox.y - tBox.y; break;
+          case 'center-v': dy = (uBox.y + uBox.height / 2) - (tBox.y + tBox.height / 2); break;
+          case 'bottom':   dy = (uBox.y + uBox.height) - (tBox.y + tBox.height); break;
+        }
+        this.translateEl(el, dx, dy);
+      });
+    } else {
+      const vb = mainSvg.viewBox.baseVal;
+      const canvasW = vb && vb.width > 0 ? vb.width : mainSvg.clientWidth;
+      const canvasH = vb && vb.height > 0 ? vb.height : mainSvg.clientHeight;
+      
+      const canvasX = -canvasW / 2;
+      const canvasY = -canvasH / 2;
 
-    switch (mode) {
-      case 'left':     dx = canvasX - tBox.x; break;
-      case 'center-h': dx = canvasX + canvasW / 2 - tBox.x - tBox.width / 2; break;
-      case 'right':    dx = canvasX + canvasW - tBox.x - tBox.width; break;
-      case 'top':      dy = canvasY - tBox.y; break;
-      case 'center-v': dy = canvasY + canvasH / 2 - tBox.y - tBox.height / 2; break;
-      case 'bottom':   dy = canvasY + canvasH - tBox.y - tBox.height; break;
+      const uBox = this.getUnionBBox(els);
+      let dx = 0, dy = 0;
+
+      switch (mode) {
+        case 'left':     dx = canvasX - uBox.x; break;
+        case 'center-h': dx = 0 - (uBox.x + uBox.width / 2); break;
+        case 'right':    dx = canvasX + canvasW - (uBox.x + uBox.width); break;
+        case 'top':      dy = canvasY - uBox.y; break;
+        case 'center-v': dy = 0 - (uBox.y + uBox.height / 2); break;
+        case 'bottom':   dy = canvasY + canvasH - (uBox.y + uBox.height); break;
+      }
+
+      els.forEach(el => this.translateEl(el, dx, dy));
     }
 
-    els.forEach(el => this.translateEl(el, dx, dy));
     this.renderSelectionUI();
     this.notifyChange(els[0] || null);
     this.commit();
