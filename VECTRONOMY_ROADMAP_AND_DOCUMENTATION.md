@@ -312,7 +312,7 @@ Advanced text tools to design layouts directly on the canvas without converting 
 77. ✅ [SHIPPED] **Text Along Arbitrary Curves**
     *   *Technical Integration*: Map text character baselines to the points along an arbitrary bezier curve.
     *   *Market Value*: Enables wave-like, flowing decorative typographic designs.
-88. ✅ [SHIPPED] **Vertical Typographic Mode**
+78. ✅ [SHIPPED] **Vertical Typographic Mode**
     *   *Technical Integration*: Arrange text layout grids vertically.
     *   *Market Value*: Essential for traditional East Asian vertical sign engraving.
 79. ✅ [SHIPPED] **Stencil Bridge Injector**

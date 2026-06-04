@@ -1,40 +1,147 @@
 # Vectronomy
 
-> Professional-grade browser-based XCS to SVG converter and vector editing studio for laser cutting, CNC, and precision fabrication.
+> Free, open-source online design studio for digital creators, makers, and fabricators. Vector editing, photo editing, SVG creation, image tracing, and fabrication-ready export for laser cutting, 3D printing, CNC, and vinyl cutting.
 
-## About
+## What is Vectronomy?
 
-Vectronomy is a free, open-source web application that runs entirely in your browser. It converts XCS project files (used by xTool laser cutters) into clean, production-ready SVG files. Beyond conversion, it provides a full vector editing studio with professional-grade tools.
+Vectronomy is a free, open-source online design studio that runs entirely in your browser. It is built for digital creators, content creators, makers, and fabricators who need a complete design tool without downloads, accounts, or subscriptions.
 
-## Key Features
+Vectronomy combines a professional vector graphics editor, photo and image editing tools, SVG creation, image-to-vector tracing, XCS project conversion, and fabrication-ready export — all in one browser-based workspace. It is a free alternative to Adobe Illustrator, Inkscape, Figma, and Canva.
 
-- **XCS to SVG Conversion**: Drag-and-drop .xcs project files and instantly convert them to standards-compliant SVG
-- **Vector Drawing Tools**: Bezier pen, pencil, line, polyline, rectangle, circle, polygon, star, and spiral tools
-- **Node Editing**: High-precision anchor point and handle editing for full path control
-- **Pathfinder Operations**: Unite, subtract, intersect, exclude, and divide boolean operations
-- **Layer Management**: Multi-layer workspace with grouping, locking, and z-order control
-- **Align & Distribute**: Full alignment and distribution grid for precise layout
-- **Image Tracing**: Silhouette, centerline, edge detection, and posterized multi-color tracing
-- **CNC/Fabrication Tools**: Kerf offset, pocket hatching, chamfering, drilling, milling tabs, concentric hatching
-- **Export Options**: SVG, PNG, JPEG, source text, and clipboard export
-- **Grid & Snap**: Configurable grid overlay with snap-to-grid support
-- **Rulers**: Interactive rulers with real-world unit display (mm/inch)
-- **Undo/Redo**: Full undo/redo history with drawing-level granularity
-- **Dark/Light Theme**: System-aware theme switching
-- **No Account Required**: Everything runs locally in the browser — no sign-up, no data sent to servers
+## Who is Vectronomy for?
+
+- **Digital creators** — designers, illustrators, and artists creating vector artwork
+- **Content creators** — YouTubers, streamers, and social media creators designing graphics and thumbnails
+- **Makers** — hobbyists and professionals using laser cutters, 3D printers, CNC routers, and vinyl cutters
+- **Fabricators** — engineers and machinists preparing production-ready vector files
+- **Students and educators** — anyone learning design, fabrication, or vector graphics
+- **Open source enthusiasts** — developers contributing to free design tools
+
+## Photo & Image Editing
+
+- Import PNG, JPEG, and other raster images
+- Adjust brightness, contrast, and blur
+- Image tracing — convert photos to editable vector paths
+- Four tracing modes: Silhouette, Centerline, Edge Detection, Posterization
+- Logo vectorization and photo tracing
+- Overlay images on the vector canvas for reference
+
+## Vector Drawing Tools
+
+- **Bezier Pen Tool** — Create precise vector curves with anchor points and handles
+- **Pencil Tool** — Freehand drawing with automatic path smoothing
+- **Shape Tools** — Rectangle, circle, ellipse, polygon, star, spiral
+- **Line Tools** — Line, polyline for precise straight segments
+- **Brush & Eraser** — Variable-size brush and eraser with style options
+- **Frame Tool** — Artboard management for multi-frame projects
+- **Node Editor** — Direct manipulation of anchor points, handles, and path segments
+
+## SVG Creation & Editing
+
+- Create SVG files from scratch with drawing tools
+- Edit existing SVG files — drag and drop to open
+- Modify paths, strokes, fills, opacity, and colors
+- Full layer management with grouping and z-order
+- Export clean, standards-compliant SVG files
+
+## Path Operations (Pathfinder)
+
+- **Unite** — Merge multiple shapes into one
+- **Subtract** — Cut one shape from another
+- **Intersect** — Keep only the overlapping area
+- **Exclude** — Remove the overlap and keep the rest
+- **Divide** — Split shapes at intersection points
+- **Path Flattening** — Convert curves to line segments
+- **Path Reversal** — Reverse the direction of path segments
+
+## Image Tracing — Raster to Vector
+
+- **Silhouette Trace** — Convert images to black/white vector outlines
+- **Centerline Trace** — Extract skeletal center paths from images
+- **Edge Detection** — High-pass edge detection for outline extraction
+- **Posterization** — Multi-color layered vector output from photographs
+
+## XCS to SVG Conversion
+
+- Convert xTool Creative Space (.xcs) project files to SVG
+- Drag and drop XCS files to view and export all layers
+- Compatible with all xTool laser cutter project files
+- No xTool software installation required
+
+## Laser Cutting, 3D Printing & CNC Fabrication Tools
+
+- **Kerf Offset** — Compensate for laser beam width
+- **Pocket Hatching** — Generate pocket clearing toolpaths
+- **Chamfering** — Create chamfer/bevel toolpaths
+- **Drill Conversion** — Convert circles to drill hole operations
+- **Milling Tabs** — Add holding tabs for CNC milling
+- **Concentric Hatching** — Generate concentric pocket clearing paths
+- Compatible with: Lightburn, LaserGRBL, Glowforge, Epilog, Prusa, Cura, Cricut, Silhouette, and more
+
+## Layer Management & Alignment
+
+- Multi-layer workspace with named tabs
+- Group and ungroup elements
+- Lock layers to prevent editing
+- Z-order controls (bring to front, send to back)
+- Visual layer tree with color-coded groups
+- Horizontal alignment: left, center, right
+- Vertical alignment: top, middle, bottom
+- Grid overlay with snap-to-grid
+- Interactive rulers with mm and inch units
+- Grid array creation for repeated patterns
+
+## Export Formats
+
+- **SVG** — Clean, standards-compliant scalable vector graphics
+- **PNG** — High-resolution raster export at 2x
+- **JPEG** — Compressed raster with white background
+- **Source Text** — Raw SVG code as text file
+- **Clipboard** — Copy SVG code directly
+- **Multi-layer batch export** — Download all layers as separate SVG files
+
+## Additional Features
+
+- Full undo/redo with drawing-level history
+- Dark mode and light mode with system theme detection
+- Drag and drop file import (SVG, XCS, PNG, JPEG)
+- Stroke and fill customization with color picker
+- Opacity controls for stroke and fill
+- Stroke cap and join settings
+- Image brightness, contrast, and blur adjustment
+- Interactive onboarding tours
+- Keyboard shortcuts for every tool
+- Custom hotkey mapping
 
 ## Pages
 
-- `/` — Main Studio (vector editor and XCS converter)
+- `/` — Main Studio (design editor workspace)
 - `/roadmap` — Product roadmap with 140 planned features across 10 divisions
-- `/help` — Interactive help center with tutorials and keyboard shortcut reference
+- `/help` — Interactive help center with tutorials and keyboard shortcuts
 
 ## Technical Details
 
 - Built with TypeScript and Vite
-- Client-side only — no server-side processing
+- Client-side only — all processing happens in the browser, no server uploads
 - Works in all modern browsers with HTML5, Canvas, and SVG support
-- MIT Licensed
+- Open source, MIT Licensed
+- No account or registration required
+
+## Use Cases
+
+- Design and create vector graphics from scratch
+- Edit and manipulate SVG files online
+- Edit photos and images in the browser
+- Trace raster images to vector (logos, artwork, photos)
+- Create designs for laser cutting
+- Prepare files for 3D printing
+- Design CNC machining layouts
+- Create vinyl cutter files for Cricut and Silhouette
+- Convert xTool XCS project files to SVG
+- Boolean pathfinder operations for complex shapes
+- Create SVG icons, logos, and digital artwork
+- Precision node editing for professional vector work
+- Design fabrication-ready technical drawings
 
 ## Links
 

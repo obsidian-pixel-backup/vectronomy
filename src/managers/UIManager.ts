@@ -12,6 +12,7 @@ export class UIManager {
     this.initSidebar();
     this.initModals();
     this.initHotkeys();
+    this.initAccordions();
   }
 
   private initTheme() {
@@ -150,6 +151,23 @@ export class UIManager {
           if (shortcutsTab) shortcutsTab.click();
         }, 50);
       }
+    });
+  }
+  private initAccordions() {
+    const titles = document.querySelectorAll('.prop-section-title');
+    titles.forEach(title => {
+      title.addEventListener('click', (e) => {
+        // Prevent toggling if user clicks on a button or input inside the title (like group/ungroup or toggle switches)
+        const target = e.target as HTMLElement;
+        if (target.closest('button, input, label')) {
+          return;
+        }
+        
+        const section = title.closest('.prop-section');
+        if (section) {
+          section.classList.toggle('collapsed');
+        }
+      });
     });
   }
 }
