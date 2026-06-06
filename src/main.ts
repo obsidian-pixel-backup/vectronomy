@@ -1479,7 +1479,7 @@ tabBtns.forEach(btn => {
     btn.classList.add('active');
 
     // Update content visibility
-    const rightPanel = document.getElementById('right-panel');
+    const rightPanel = document.getElementById('properties-panel');
     if (rightPanel) {
       const contents = rightPanel.querySelectorAll('.panel-content');
       contents.forEach(c => {

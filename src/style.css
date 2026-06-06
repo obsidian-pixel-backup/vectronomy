@@ -2739,3 +2739,8 @@ html[data-theme="light"] #grid-minor-spacing {
 
   .layer-tab .tab-count { display:none; }
 }
+
+.panel-tabs { display: flex; width: 100%; align-items: center; justify-content: flex-start; }
+.tab-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 10px; cursor: pointer; transition: color var(--transition-fast); white-space: nowrap; outline: none; border-bottom: 2px solid transparent; }
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
