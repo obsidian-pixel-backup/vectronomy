@@ -145,6 +145,15 @@ export class VectorEditor {
   private pencilPoints: { x: number; y: number }[] = [];
   private polylinePoints: { x: number; y: number }[] = [];
 
+  public brushCursor: SVGCircleElement | null = null;
+  public brushSize: number = 20;
+  public brushPoints: { x: number; y: number }[] = [];
+  public eraserPoints: { x: number; y: number }[] = [];
+  public currentStrokeColor: string = '#00ffc2';
+  public brushStyle: 'round' | 'square' | 'flat' | 'calligraphic' = 'round';
+  public snapFn?: (pt: DOMPoint | {x: number, y: number}) => DOMPoint | {x: number, y: number};
+  public setSnapFunction(fn: (pt: DOMPoint | {x: number, y: number}) => DOMPoint | {x: number, y: number}) {
+    this.snapFn = fn;
   }
 
   // Feature 56 & 60 properties
