@@ -1493,11 +1493,11 @@
       <h2 class="modal-title">Welcome to Vectronomy</h2>
       <p class="modal-subtitle">Sign in to save projects and sync across devices.</p>
       
-      <div class="auth-form">
-        <input type="email" class="auth-input" placeholder="Email Address" id="auth-email" />
-        <input type="password" class="auth-input" placeholder="Password" id="auth-password" />
-        <button class="auth-btn-primary" id="btn-auth-submit">Log In</button>
-      </div>
+      <form class="auth-form" onsubmit="event.preventDefault();">
+        <input type="email" class="auth-input" placeholder="Email Address" id="auth-email" autocomplete="username" />
+        <input type="password" class="auth-input" placeholder="Password" id="auth-password" autocomplete="current-password" />
+        <button type="submit" class="auth-btn-primary" id="btn-auth-submit">Log In</button>
+      </form>
       
       <button class="auth-toggle" id="btn-auth-toggle">Don't have an account? Sign up</button>
       
