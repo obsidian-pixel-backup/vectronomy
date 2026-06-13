@@ -25,6 +25,9 @@
   },
   "dependencies": {
     "@panzoom/panzoom": "^4.6.2",
+    "@stripe/stripe-js": "^9.8.0",
+    "@supabase/supabase-js": "^2.108.1",
+    "firebase": "^12.14.0",
     "jszip": "^3.10.1",
     "paper": "^0.12.18"
   }

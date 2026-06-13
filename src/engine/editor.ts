@@ -145,18 +145,6 @@ export class VectorEditor {
   private pencilPoints: { x: number; y: number }[] = [];
   private polylinePoints: { x: number; y: number }[] = [];
 
-  // Brush/Eraser state
-  brushSize = 12;
-  brushStyle: 'round' | 'calligraphic' | 'flat' = 'round';
-  currentStrokeColor: string = '#00ffc2';
-  private magicWandThreshold: number = 20;
-  private brushPoints: { x: number; y: number }[] = [];
-  private eraserPoints: { x: number; y: number }[] = [];
-  private brushCursor: SVGCircleElement | null = null;
-  
-  private snapFn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null = null;
-  public setSnapFunction(fn: ((pt: {x: number, y: number}) => {x: number, y: number}) | null) {
-    this.snapFn = fn;
   }
 
   // Feature 56 & 60 properties
