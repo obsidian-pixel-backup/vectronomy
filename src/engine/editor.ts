@@ -1446,6 +1446,8 @@ export class VectorEditor {
       this.isDragging = true;
       this.dragMode = 'move';
       this.dragStartX = e.clientX; this.dragStartY = e.clientY;
+      const pt = this.getSvgPoint(e);
+      if (pt) this.lastSnappedPt = pt;
       this.renderSelectionUI();
       this.notifyChange(this.getSelectedEls()[0] || null);
       this.onInteractionStart();
