@@ -292,6 +292,13 @@ export class VectorEditor {
 
   setLayer(layer: ConvertedLayer) { this.currentLayer = layer; this.clearSelection(); }
 
+  public loadFromSvg(svgString: string) {
+    const mainSvg = this.container.querySelector('svg');
+    if (mainSvg) {
+      mainSvg.outerHTML = svgString;
+    }
+  }
+
   setTool(tool: typeof this.activeTool) {
     if (this.activeTool === 'pen' && this.isDrawing) {
       this.finalizePenPath();
