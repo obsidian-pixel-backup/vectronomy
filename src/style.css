@@ -436,22 +436,40 @@ body::before {
 
 .preview-controls {
   position:absolute;
-  top:12px;
-  right:12px;
+  top: auto;
+  bottom: 24px;
+  right: 24px;
   z-index:45;
   display:flex;
   align-items:center;
   gap:6px;
   padding:6px;
-  background:rgba(18,18,28,.88);
-  border:1px solid var(--border-strong);
-  border-radius:var(--radius-md);
-  box-shadow:var(--shadow-md);
-  backdrop-filter:blur(12px);
-  -webkit-backdrop-filter:blur(12px);
+  background:rgba(20, 20, 28, 0.65);
+  border:1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.preview-controls.collapsed .control-group { display:none !important; }
+.preview-controls .control-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-direction: row;
+  overflow: hidden;
+  max-width: 600px;
+  opacity: 1;
+  transition: max-width 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, margin 0.3s ease;
+}
+
+.preview-controls.collapsed .control-group { 
+  max-width: 0 !important;
+  opacity: 0 !important;
+  margin-left: -6px; /* offset the gap if necessary, or just let max-width hide it */
+  pointer-events: none;
+}
 .preview-controls.collapsed .collapse-toggle svg { transform:rotate(180deg); }
 
 .zoom-level {
@@ -2712,9 +2730,10 @@ html[data-theme="light"] #grid-minor-spacing {
   }
 
   .preview-controls {
-    left:28px;
+    left:auto;
     right:8px;
-    top:8px;
+    top:auto;
+    bottom:8px;
     width:auto;
     max-width:none;
     overflow-x:auto;
@@ -2956,7 +2975,6 @@ html[data-theme="light"] #grid-minor-spacing {
 .help-sidebar,
 .help-content-area,
 .app-sidebar,
-.preview-controls,
 .layer-tabs,
 .shapes-popover-menu,
 .export-dropdown-menu,
