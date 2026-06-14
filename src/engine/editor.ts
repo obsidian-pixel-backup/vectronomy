@@ -3333,7 +3333,20 @@ export class VectorEditor {
         } as DOMRect;
       }
     }
-    const matrix = el.transform.baseVal.consolidate()?.matrix;
+
+    let matrix: DOMMatrix | undefined;
+    const mainSvg = this.container.querySelector('svg');
+    const viewport = mainSvg?.querySelector('#viewport') as SVGGElement | null;
+    if (viewport) {
+      const ctmEl = el.getCTM();
+      const ctmViewport = viewport.getCTM();
+      if (ctmEl && ctmViewport) {
+        matrix = ctmViewport.inverse().multiply(ctmEl);
+      }
+    }
+    if (!matrix) {
+      matrix = el.transform.baseVal.consolidate()?.matrix;
+    }
     if (!matrix) return bbox;
 
     const pts = [
