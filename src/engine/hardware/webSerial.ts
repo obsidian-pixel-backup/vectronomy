@@ -2,6 +2,22 @@
  * Phase 3: Hardware Interfaces & Automation
  * Web Serial API for direct GRBL/Ruida machine control
  */
+
+export interface SerialPort {
+  open(options: { baudRate: number }): Promise<void>;
+  close(): Promise<void>;
+  writable: WritableStream;
+  readable: ReadableStream;
+}
+
+declare global {
+  interface Navigator {
+    serial: {
+      requestPort(options?: { filters: any[] }): Promise<SerialPort>;
+      getPorts(): Promise<SerialPort[]>;
+    };
+  }
+}
 export class MachineController {
   private port: SerialPort | null = null;
 
