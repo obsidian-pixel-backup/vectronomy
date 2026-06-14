@@ -24,8 +24,11 @@
     "vite": "^8.0.13"
   },
   "dependencies": {
+    "@mlc-ai/web-llm": "^0.2.84",
     "@panzoom/panzoom": "^4.6.2",
+    "@types/three": "^0.184.1",
     "jszip": "^3.10.1",
-    "paper": "^0.12.18"
+    "paper": "^0.12.18",
+    "three": "^0.184.0"
   }
 }

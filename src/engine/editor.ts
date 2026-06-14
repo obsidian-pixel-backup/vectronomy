@@ -12,6 +12,9 @@ import { FabricationEngine } from './fabrication';
 import { MillingEngine } from './milling';
 import { TracingEngine } from './tracing';
 import { Pathfinder, BooleanOp } from './pathfinder';
+import { NestingEngine, NestingOptions } from './nesting';
+import { AssemblyPreviewEngine } from './assemblyPreview';
+import { AIEngine } from './aiEngine';
 import { LayoutEngine } from './layoutEngine';
 
 export interface ElementProperties {
@@ -550,12 +553,12 @@ export class VectorEditor {
     }
   }
 
-  public applyKerf(kerfWidth: number) {
+  public applyKerf(kerfWidth: number, direction: 'auto' | 'inward' | 'outward' = 'auto') {
     const els = this.getSelectedEls();
     if (els.length === 0) return;
     
     const svgs = els.map(el => el.outerHTML);
-    const resultSvgs = FabricationEngine.applyKerfCompensation(svgs, kerfWidth);
+    const resultSvgs = FabricationEngine.applyKerfCompensation(svgs, kerfWidth, direction);
     
     let changed = false;
     for (let i = 0; i < els.length; i++) {
@@ -694,6 +697,54 @@ export class VectorEditor {
 
   // ── Batch 6 Features (CNC) ────────────────────────────────────
 
+  
+
+  
+  public async generate3DAssembly(containerId: string, thickness: number, materialType: 'wood' | 'acrylic' = 'wood') {
+    const els = this.getSelectedEls();
+    const svgs = els.length > 0 ? els.map(el => el.outerHTML) : Array.from(this.drawGroup.children).map(c => c.outerHTML);
+    
+    // Clear any previous engine on that container if needed
+    (window as any).currentPreviewEngine?.destroy();
+    
+    const engine = new AssemblyPreviewEngine(containerId);
+    (window as any).currentPreviewEngine = engine;
+    
+    engine.addSvgExtrusions(svgs, thickness, materialType);
+  }
+
+  public applyNesting(options: NestingOptions) {
+    const els = this.getSelectedEls();
+    if (els.length === 0) return;
+    
+    const svgs = els.map(el => el.outerHTML);
+    const resultSvgs = NestingEngine.nestPaths(svgs, options);
+    
+    let changed = false;
+    for (let i = 0; i < els.length; i++) {
+        if (resultSvgs[i] !== svgs[i]) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(resultSvgs[i], 'image/svg+xml');
+            const newPath = doc.documentElement.firstElementChild as SVGElement;
+            if (newPath) {
+                Array.from(els[i].attributes).forEach(attr => {
+                    if (attr.name !== 'd' && attr.name !== 'transform' && !newPath.hasAttribute(attr.name)) {
+                        newPath.setAttribute(attr.name, attr.value);
+                    }
+                });
+                // Remove transform since it's baked in the new d
+                newPath.removeAttribute('transform');
+                els[i].replaceWith(newPath);
+                changed = true;
+            }
+        }
+    }
+    
+    if (changed) {
+        this.clearSelection();
+        this.commit();
+    }
+  }
   public applyCncBitOffset(bitRadius: number) {
     const els = this.getSelectedEls();
     if (els.length === 0 || bitRadius === 0) return;

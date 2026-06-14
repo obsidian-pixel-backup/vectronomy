@@ -10,7 +10,7 @@ export class FabricationEngine {
   }
 
   // ── Feature 31: Friction-Fit Kerf Compensator ──────────────────
-  static applyKerfCompensation(svgs: string[], kerfWidth: number): string[] {
+  static applyKerfCompensation(svgs: string[], kerfWidth: number, direction: 'auto' | 'inward' | 'outward' = 'auto'): string[] {
     this.init();
     paper.project.clear();
 
@@ -39,7 +39,14 @@ export class FabricationEngine {
       
       const depth = depths.get(p) || 0;
       // Even depth = outer cut (expand), Odd depth = inner cut/hole (shrink)
-      const offset = depth % 2 === 0 ? kerfWidth / 2 : -kerfWidth / 2;
+      let offset = 0;
+      if (direction === 'auto') {
+        offset = depth % 2 === 0 ? kerfWidth / 2 : -kerfWidth / 2;
+      } else if (direction === 'outward') {
+        offset = kerfWidth / 2;
+      } else if (direction === 'inward') {
+        offset = -kerfWidth / 2;
+      }
       
       const resultSvg = Pathfinder.offsetPath(svgs[i], offset);
       if (resultSvg) {

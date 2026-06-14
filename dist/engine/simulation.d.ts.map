@@ -1,0 +1,1 @@
+{"version":3,"file":"simulation.d.ts","sourceRoot":"","sources":["../../src/engine/simulation.ts"],"names":[],"mappings":"AAAA,qBAAa,gBAAgB;IAC3B,OAAO,CAAC,SAAS,CAAc;IAC/B,OAAO,CAAC,QAAQ,CAA4B;IAC5C,OAAO,CAAC,YAAY,CAAS;IAC7B,OAAO,CAAC,WAAW,CAAuB;gBAE9B,SAAS,EAAE,WAAW;IAI3B,IAAI;IAYJ,KAAK,CAAC,KAAK,GAAE,MAAU;IAyJ9B,OAAO,CAAC,UAAU;CAYnB"}

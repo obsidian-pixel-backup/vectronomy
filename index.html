@@ -371,6 +371,14 @@
               </button>
             </div>
           </div>
+          <button id="btn-toggle-nesting" class="btn btn-secondary btn-sm" title="Smart Nesting Optimizer" style="margin-right: 4px; border-color: var(--border-accent); color: var(--accent); background: var(--accent-soft);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            <span style="margin-left: 4px;">Auto-Nest</span>
+          </button>
+          <button id="btn-toggle-machine" class="btn btn-secondary btn-sm" title="Machine Control & Connection" style="margin-left: 4px; border-color: var(--border-accent); color: var(--accent); background: var(--accent-soft);">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/><path d="M12 7v5"/></svg>
+            <span>Connect</span>
+          </button>
           <button id="btn-reset" class="btn btn-ghost btn-sm">
             <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
             Close
@@ -431,6 +439,144 @@
       <section id="studio" class="studio" hidden>
 
         <!-- ── Editor Layout ────────────────────────────────────── -->
+
+
+        <!-- Smart Nesting Floating Panel -->
+        <div id="nesting-control-panel" class="glass" style="display: none; position: absolute; right: 280px; top: 60px; width: 280px; z-index: 2000; flex-direction: column; padding: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.8), 0 0 2px rgba(0,255,194,0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+              <h3 style="margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">Smart Nesting</h3>
+            </div>
+            <button id="btn-close-nesting" class="btn-icon" style="width: 24px; height: 24px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+
+          <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; display: block;">Material Sheet</span>
+          <div class="prop-row" style="margin-bottom: 12px;">
+            <div class="input-field" style="flex: 1;" title="Sheet Width (X) in mm">
+              <span>W</span>
+              <input type="number" id="prop-nest-width" step="1" min="1" value="600" />
+            </div>
+            <div class="input-field" style="flex: 1;" title="Sheet Height (Y) in mm">
+              <span>H</span>
+              <input type="number" id="prop-nest-height" step="1" min="1" value="400" />
+            </div>
+          </div>
+
+          <div style="height: 1px; background: var(--glass-border); margin: 8px 0;"></div>
+
+          <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; display: block;">Packing Options</span>
+          <div class="prop-row" style="margin-bottom: 12px;">
+            <div class="input-field" style="flex: 1;" title="Spacing between parts in mm">
+              <span>Margin</span>
+              <input type="number" id="prop-nest-margin" step="0.5" min="0" value="2.0" />
+            </div>
+          </div>
+
+          <div class="prop-row" style="align-items: center; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 0.75rem; color: var(--text-primary);" title="Allow parts to rotate by 90 degrees to fit better">Allow 90° Rotations</span>
+            <label class="mini-toggle">
+              <input type="checkbox" id="prop-nest-rotation" checked />
+              <span class="mini-track"></span>
+            </label>
+          </div>
+          
+          <div class="prop-row" style="align-items: center; justify-content: space-between; margin-bottom: 16px;">
+            <span style="font-size: 0.75rem; color: var(--text-primary);" title="Enable exact path intersection checking (Slower but tighter fit)">Exact Shape Match</span>
+            <label class="mini-toggle">
+              <input type="checkbox" id="prop-nest-exact" />
+              <span class="mini-track"></span>
+            </label>
+          </div>
+
+          <div class="prop-row">
+            <button class="btn btn-primary btn-sm" id="btn-execute-nesting" style="width: 100%; justify-content: center; box-shadow: 0 0 18px rgba(0,255,194,0.25);">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14" style="margin-right: 6px;"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              Execute Nesting
+            </button>
+          </div>
+        </div>
+
+        <!-- Machine Control Floating Panel -->
+        <div id="machine-control-panel" class="glass" style="display: none; position: absolute; right: 330px; top: 12px; width: 340px; z-index: 2000; flex-direction: column; padding: 16px;">
+          
+          <!-- Header -->
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); padding-bottom: 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--accent)" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><line x1="6" y1="8" x2="6" y2="8"/><line x1="10" y1="8" x2="18" y2="8"/></svg>
+              <h3 style="margin: 0; font-size: 0.9rem; font-weight: 600; color: var(--text-primary);">Machine Control</h3>
+            </div>
+            <button id="btn-close-machine" class="btn-icon" style="width: 24px; height: 24px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+          </div>
+
+          <!-- Status & Connect -->
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.75rem; color: var(--text-secondary);">Status:</span>
+              <span id="machine-status-badge" style="font-size: 0.7rem; font-family: var(--font-mono); font-weight: 600; padding: 2px 8px; border-radius: 4px; background: rgba(255, 68, 68, 0.1); color: #ff5555; border: 1px solid rgba(255, 68, 68, 0.3);">DISCONNECTED</span>
+            </div>
+            <button id="btn-machine-connect" class="btn btn-primary" style="width: 100%; justify-content: center; gap: 8px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              Connect via Web Serial
+            </button>
+          </div>
+
+          <!-- Jog Controls -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-primary);">Manual Jog</span>
+            <div style="display: flex; gap: 4px; align-items: center;">
+              <span style="font-size: 0.65rem; color: var(--text-muted);">Step:</span>
+              <select id="machine-jog-step" class="prop-select" style="padding: 2px 4px; font-size: 0.7rem;">
+                <option value="0.1">0.1 mm</option>
+                <option value="1" selected>1 mm</option>
+                <option value="10">10 mm</option>
+              </select>
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 16px; margin-bottom: 20px;">
+            <!-- X/Y D-Pad -->
+            <div style="display: grid; grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); gap: 4px; flex: 1;">
+              <div></div>
+              <button class="btn btn-secondary" id="jog-y-plus" style="padding: 0; display: flex; align-items: center; justify-content: center; height: 100%;" title="Y+"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg></button>
+              <div></div>
+              
+              <button class="btn btn-secondary" id="jog-x-minus" style="padding: 0; display: flex; align-items: center; justify-content: center; height: 100%;" title="X-"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+              <button class="btn btn-ghost" id="jog-home" style="padding: 0; display: flex; align-items: center; justify-content: center; height: 100%; border: 1px solid var(--border-strong);" title="Home All (G28)"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></button>
+              <button class="btn btn-secondary" id="jog-x-plus" style="padding: 0; display: flex; align-items: center; justify-content: center; height: 100%;" title="X+"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg></button>
+              
+              <div></div>
+              <button class="btn btn-secondary" id="jog-y-minus" style="padding: 0; display: flex; align-items: center; justify-content: center; height: 100%;" title="Y-"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button>
+              <div></div>
+            </div>
+            
+            <!-- Z Axis -->
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 44px;">
+              <button class="btn btn-secondary" id="jog-z-plus" style="height: 58px; padding: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; font-size: 0.65rem; font-weight: bold;" title="Z+">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 2px;"><polyline points="18 15 12 9 6 15"/></svg>
+                Z
+              </button>
+              <button class="btn btn-secondary" id="jog-z-minus" style="height: 58px; padding: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; font-size: 0.65rem; font-weight: bold;" title="Z-">
+                Z
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="margin-top: 2px;"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Console Readout -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-primary);">Serial Console</span>
+            <button id="btn-clear-console" class="btn-icon" style="width: 20px; height: 20px;" title="Clear Console"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
+          </div>
+          <div id="machine-console" style="background: var(--bg-primary); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 8px; font-family: var(--font-mono); font-size: 0.65rem; color: #00ff88; height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.5);">
+            <div>&gt; Waiting for connection...</div>
+          </div>
+          <div style="display: flex; margin-top: 8px;">
+            <input type="text" id="machine-command-input" placeholder="Enter G-Code command..." style="flex: 1; background: var(--bg-tertiary); border: 1px solid var(--border-strong); border-radius: var(--radius-sm) 0 0 var(--radius-sm); color: var(--text-primary); font-family: var(--font-mono); font-size: 0.7rem; padding: 6px 8px; outline: none;" disabled />
+            <button id="btn-machine-send" class="btn btn-secondary btn-sm" style="border-radius: 0 var(--radius-sm) var(--radius-sm) 0; border-left: none;" disabled>Send</button>
+          </div>
+        </div>
+
         <div class="editor-layout">
 
           <!-- ── Left Tools Panel ──────────────────────────────── -->
@@ -570,6 +716,11 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><polyline points="15 18 9 12 15 6"></polyline></svg>
                 </button>
                 <div class="control-group" style="display: flex; gap: 6px; align-items: center; flex-direction: row;">
+                                    <!-- 2D/3D View Toggle -->
+                  <div class="view-toggle" style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-strong); border-radius: 6px; overflow: hidden; margin-right: 8px;">
+                    <button id="btn-view-2d" class="btn-ghost active" style="padding: 4px 12px; font-size: 0.75rem; border: none; background: var(--accent-dim); color: var(--accent); font-weight: 600; cursor: default;">2D CAD</button>
+                    <button id="btn-view-3d" class="btn-ghost" style="padding: 4px 12px; font-size: 0.75rem; border: none; color: var(--text-secondary); cursor: pointer;">3D Preview</button>
+                  </div>
                   <button id="btn-toggle-rulers" class="btn-icon" title="Toggle Rulers">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 3v18H3V3h18zm-6 0v18M9 3v18M3 9h18M3 15h18" opacity="0.5"/><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
                   </button>
@@ -639,6 +790,42 @@
     <div id="preview-container" class="preview-container"></div>
   </div>
 </div>
+
+              <!-- 3D WebGL Viewport (Hidden by default) -->
+              <div id="webgl-viewport" style="display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg-primary);">
+                <!-- Floating Material Shaders Panel -->
+                <div id="material-shaders-panel" class="glass" style="position: absolute; top: 16px; right: 16px; width: 220px; padding: 12px; display: flex; flex-direction: column; gap: 8px; z-index: 10; box-shadow: 0 8px 32px rgba(0,0,0,0.6);">
+                  <div style="display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--glass-border); padding-bottom: 8px; margin-bottom: 4px;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="var(--accent)" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                    <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-primary);">Material Shaders</span>
+                  </div>
+                  
+                  <button class="btn btn-secondary btn-sm material-btn" data-material="wood" style="justify-content: flex-start; padding-left: 8px;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #5c4033; margin-right: 6px; box-shadow: inset 0 0 2px rgba(0,0,0,0.5);"></span>
+                    Walnut Wood
+                  </button>
+                  <button class="btn btn-secondary btn-sm material-btn active" data-material="wood" style="justify-content: flex-start; padding-left: 8px; border-color: var(--accent); color: var(--accent); background: var(--accent-glow);">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #d7c4a1; margin-right: 6px; box-shadow: inset 0 0 2px rgba(0,0,0,0.5);"></span>
+                    Birch Plywood
+                  </button>
+                  <button class="btn btn-secondary btn-sm material-btn" data-material="acrylic" style="justify-content: flex-start; padding-left: 8px;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.6); margin-right: 6px;"></span>
+                    Clear Acrylic
+                  </button>
+                  <button class="btn btn-secondary btn-sm material-btn" data-material="acrylic" style="justify-content: flex-start; padding-left: 8px;">
+                    <span style="width: 12px; height: 12px; border-radius: 50%; background: #1a1a1a; margin-right: 6px; box-shadow: inset 0 0 2px rgba(0,0,0,0.8);"></span>
+                    Matte Black Acrylic
+                  </button>
+                  
+                  <div style="height: 1px; background: var(--glass-border); margin: 4px 0;"></div>
+                  <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">Thickness (Z)</span>
+                    <div class="input-field" style="width: 70px;">
+                      <input type="number" id="prop-3d-thickness" value="3.0" step="0.5" style="width: 100%;" />
+                    </div>
+                  </div>
+                </div>
+              </div>
 
             </div>
 
@@ -793,7 +980,7 @@
                 <!-- Pathfinder / Boolean Operations (Illustrator style) -->
                 <div class="prop-section" id="prop-section-pathfinder">
                   <div class="prop-section-title">Pathfinder<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
-                  <div class="align-grid" style="grid-template-columns: repeat(4, 1fr); gap: 4px;">
+                  <div class="align-grid" style="grid-template-columns: repeat(5, 1fr); gap: 4px;">
                     <button class="pathfinder-btn" id="path-unite" title="Unite (Union)">
                       <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M4 4h10v6h6v10H10v-6H4z"/></svg>
                     </button>
@@ -805,6 +992,9 @@
                     </button>
                     <button class="pathfinder-btn" id="path-exclude" title="Exclude">
                       <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M4 4h10v10H4V4zm6 6h10v10H10V10z"/></svg>
+                    </button>
+                    <button class="pathfinder-btn" id="path-divide" title="Divide">
+                      <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M4 4h10v6h-6v4H4zm10 6h6v10H10v-10zm-6 6h6v4H4z"/></svg>
                     </button>
                   </div>
                   <div class="prop-row" style="margin-top: 10px;">
@@ -820,6 +1010,107 @@
                       <span>Width</span>
                       <input type="number" id="prop-bridge-width" value="2" step="0.5" />
                     </div>
+                  </div>
+                </div>
+
+                
+                <!-- AI Copilot (Local WebGPU) -->
+                <div class="prop-section" id="prop-section-ai">
+                  <div class="prop-section-title">AI Copilot (WebGPU)<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                  
+                  <div class="prop-row" style="align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <div style="display: flex; flex-direction: column;">
+                      <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-primary);">Enable WebLLM</span>
+                      <span style="font-size: 0.65rem; color: var(--text-muted);">Downloads ~2.4GB model</span>
+                    </div>
+                    <label class="mini-toggle">
+                      <input type="checkbox" id="prop-ai-enable" />
+                      <span class="mini-track"></span>
+                    </label>
+                  </div>
+
+                  <div id="ai-download-container" style="display: none; flex-direction: column; gap: 4px; margin-top: 12px; margin-bottom: 8px;">
+                    <div style="display: flex; justify-content: space-between;">
+                      <span style="font-size: 0.65rem; color: var(--text-secondary);" id="ai-status-text">Downloading Weights...</span>
+                      <span style="font-size: 0.65rem; font-family: var(--font-mono); color: var(--accent);" id="ai-progress-text">0%</span>
+                    </div>
+                    <div style="width: 100%; height: 4px; background: var(--bg-primary); border-radius: 2px; overflow: hidden; border: 1px solid var(--glass-border);">
+                      <div id="ai-progress-bar" style="height: 100%; width: 0%; background: var(--accent); box-shadow: 0 0 4px var(--accent); transition: width 0.2s;"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Fabrication / Kerf Offset -->
+                <div class="prop-section" id="prop-section-kerf">
+                  <div class="prop-section-title">Kerf Offset<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                  <div class="prop-row">
+                    <div class="input-field" style="flex: 1;" title="Kerf compensation width (typically 0.00 to 0.50 mm)">
+                      <span>Width</span>
+                      <input type="number" id="prop-kerf-width" step="0.01" min="0" max="0.5" value="0.10" />
+                    </div>
+                    <label class="select-label" style="margin-left: 8px;">Direction</label>
+                    <select id="prop-kerf-direction" class="prop-select" style="flex: 1;">
+                      <option value="auto">Auto (Smart)</option>
+                      <option value="outward">Outward</option>
+                      <option value="inward">Inward</option>
+                    </select>
+                  </div>
+                  <div class="prop-row" style="margin-top: 10px;">
+                    <button class="btn btn-secondary btn-sm" id="btn-apply-kerf" style="width: 100%;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>
+                      Apply Kerf
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Fabrication / Milling & CNC -->
+                <div class="prop-section" id="prop-section-cnc">
+                  <div class="prop-section-title">Milling &amp; CNC<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+                  
+                  <!-- Pocket Hatching -->
+                  <div class="prop-row" style="align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-size: 0.75rem; font-weight: 500; color: var(--text-primary);">Pocket Hatch</span>
+                    <label class="mini-toggle">
+                      <input type="checkbox" id="prop-hatch-enabled" />
+                      <span class="mini-track"></span>
+                    </label>
+                  </div>
+                  <div class="prop-row" id="hatch-controls" style="margin-bottom: 12px;">
+                    <div class="input-field" style="flex: 1;" title="Stepover overlap percentage (40% - 80%)">
+                      <span>Overlap %</span>
+                      <input type="number" id="prop-hatch-stepover" step="1" min="40" max="80" value="50" />
+                    </div>
+                  </div>
+                  
+                  <div style="height: 1px; background: var(--glass-border); margin: 8px 0;"></div>
+
+                  <!-- CNC Bit & Offsets -->
+                  <div class="prop-row" style="margin-bottom: 12px;">
+                    <div class="input-field" style="flex: 1;" title="Router bit radius in mm">
+                      <span>Bit Radius</span>
+                      <input type="number" id="prop-cnc-bit-radius" step="0.1" min="0.1" value="3.175" />
+                    </div>
+                  </div>
+
+                  <div style="height: 1px; background: var(--glass-border); margin: 8px 0;"></div>
+
+                  <!-- Holding Tabs -->
+                  <span style="display: block; font-size: 0.75rem; font-weight: 500; color: var(--text-primary); margin-bottom: 6px;">Holding Tabs</span>
+                  <div class="prop-row">
+                    <div class="input-field" style="flex: 1;" title="Number of physical connection tabs">
+                      <span>Count</span>
+                      <input type="number" id="prop-cnc-tab-count" step="1" min="1" max="20" value="4" />
+                    </div>
+                    <div class="input-field" style="flex: 1;" title="Thickness of holding tabs in mm">
+                      <span>Thick</span>
+                      <input type="number" id="prop-cnc-tab-thick" step="0.5" min="0.5" value="2.0" />
+                    </div>
+                  </div>
+                  <div class="prop-row" style="margin-top: 10px;">
+                    <button class="btn btn-secondary btn-sm" id="btn-apply-cnc" style="width: 100%;">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                      Generate Toolpaths
+                    </button>
                   </div>
                 </div>
 

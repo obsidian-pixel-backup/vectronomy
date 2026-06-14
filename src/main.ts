@@ -26,6 +26,7 @@ import { GridManager } from './managers/GridManager';
 import { ToolbarManager } from './managers/ToolbarManager';
 import { LayerManager } from './engine/layerManager';
 import { PrecisionEngine } from './engine/precision';
+import { WebSerialBridge } from './engine/webSerial';
 
 const toolbarManager = new ToolbarManager();
 
@@ -2427,3 +2428,362 @@ document.addEventListener('DOMContentLoaded', () => {
   // Wait for initial render, then trigger landing tour
   setTimeout(() => runLandingTour(), 500);
 });
+
+
+  // Kerf Compensation
+  document.getElementById('btn-apply-kerf')?.addEventListener('click', () => {
+    const widthInput = document.getElementById('prop-kerf-width') as HTMLInputElement;
+    const dirInput = document.getElementById('prop-kerf-direction') as HTMLSelectElement;
+    if (widthInput && editor) {
+      const w = parseFloat(widthInput.value) || 0;
+      const d = (dirInput ? dirInput.value : 'auto') as 'auto' | 'inward' | 'outward';
+      editor.applyKerf(w, d);
+      if (typeof showToast !== 'undefined') showToast('Kerf compensation applied');
+    }
+  });
+
+
+  // CNC Bit Offsets and Tabs
+  document.getElementById('btn-apply-cnc')?.addEventListener('click', () => {
+    const bitRadius = parseFloat((document.getElementById('prop-cnc-bit-radius') as HTMLInputElement)?.value || '3.175');
+    const tabCount = parseFloat((document.getElementById('prop-cnc-tab-count') as HTMLInputElement)?.value || '4');
+    const tabThickness = parseFloat((document.getElementById('prop-cnc-tab-thick') as HTMLInputElement)?.value || '2');
+    
+    // Using editor methods
+    editor?.applyCncBitOffset(bitRadius);
+    if (typeof showToast !== 'undefined') showToast('CNC offsets applied');
+  });
+
+
+  // ── Machine Control & Web Serial UI ────────────────────────────────
+  const btnToggleMachine = document.getElementById('btn-toggle-machine');
+  const btnCloseMachine = document.getElementById('btn-close-machine');
+  const machineModal = document.getElementById('machine-control-panel');
+
+  if (btnToggleMachine && machineModal) {
+    btnToggleMachine.addEventListener('click', (e) => {
+      e.stopPropagation();
+      machineModal.style.display = machineModal.style.display === 'none' ? 'flex' : 'none';
+    });
+  }
+  if (btnCloseMachine && machineModal) {
+    btnCloseMachine.addEventListener('click', () => {
+      machineModal.style.display = 'none';
+    });
+  }
+
+  // Hardware Interface Wiring
+  let serialMachine: WebSerialBridge | null = null;
+  const btnMachineConnect = document.getElementById('btn-machine-connect');
+  const statusBadge = document.getElementById('machine-status-badge');
+  const consoleOut = document.getElementById('machine-console');
+  const btnClearConsole = document.getElementById('btn-clear-console');
+  const cmdInput = document.getElementById('machine-command-input') as HTMLInputElement;
+  const btnSendCmd = document.getElementById('btn-machine-send') as HTMLButtonElement;
+  const jogStepSelect = document.getElementById('machine-jog-step') as HTMLSelectElement;
+
+  function appendConsole(msg: string, isInput = false) {
+    if (!consoleOut) return;
+    const div = document.createElement('div');
+    div.textContent = (isInput ? "> " : "") + msg;
+    div.style.color = isInput ? "#8888a0" : "#00ff88";
+    consoleOut.appendChild(div);
+    consoleOut.scrollTop = consoleOut.scrollHeight;
+  }
+
+  if (btnClearConsole) {
+    btnClearConsole.addEventListener('click', () => {
+      if (consoleOut) consoleOut.innerHTML = '';
+    });
+  }
+
+  if (btnMachineConnect) {
+    btnMachineConnect.addEventListener('click', async () => {
+      if (!serialMachine) {
+        serialMachine = new WebSerialBridge();
+        serialMachine.setOnLineReceived((line: string) => {
+          appendConsole(line);
+        });
+      }
+
+      if (!serialMachine.isConnected()) {
+        try {
+          if (statusBadge) {
+            statusBadge.textContent = 'CONNECTING...';
+            statusBadge.style.color = 'var(--accent)';
+            statusBadge.style.background = 'var(--accent-glow)';
+            statusBadge.style.borderColor = 'var(--accent-dim)';
+          }
+          await serialMachine.connect(115200);
+          
+          if (statusBadge) {
+            statusBadge.textContent = 'CONNECTED';
+            statusBadge.style.color = '#00ff88';
+            statusBadge.style.background = 'rgba(0,255,136,0.1)';
+            statusBadge.style.borderColor = 'rgba(0,255,136,0.3)';
+          }
+          btnMachineConnect.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg> Disconnect';
+          btnMachineConnect.classList.remove('btn-primary');
+          btnMachineConnect.classList.add('btn-secondary');
+          if (cmdInput) cmdInput.disabled = false;
+          if (btnSendCmd) btnSendCmd.disabled = false;
+          appendConsole("Connected to machine at 115200 baud.");
+        } catch (e) {
+          console.error(e);
+          appendConsole("Connection failed: " + e);
+          if (statusBadge) {
+            statusBadge.textContent = 'DISCONNECTED';
+            statusBadge.style.color = '#ff5555';
+            statusBadge.style.background = 'rgba(255, 68, 68, 0.1)';
+            statusBadge.style.borderColor = 'rgba(255, 68, 68, 0.3)';
+          }
+        }
+      } else {
+        await serialMachine.disconnect();
+        if (statusBadge) {
+          statusBadge.textContent = 'DISCONNECTED';
+          statusBadge.style.color = '#ff5555';
+          statusBadge.style.background = 'rgba(255, 68, 68, 0.1)';
+          statusBadge.style.borderColor = 'rgba(255, 68, 68, 0.3)';
+        }
+        btnMachineConnect.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Connect via Web Serial';
+        btnMachineConnect.classList.add('btn-primary');
+        btnMachineConnect.classList.remove('btn-secondary');
+        if (cmdInput) cmdInput.disabled = true;
+        if (btnSendCmd) btnSendCmd.disabled = true;
+        appendConsole("Disconnected.");
+      }
+    });
+  }
+
+  // Jog Controls
+  const getStep = () => jogStepSelect ? parseFloat(jogStepSelect.value) : 1;
+  const F = 1000;
+
+  document.getElementById('jog-x-plus')?.addEventListener('click', () => { serialMachine?.jog('X', getStep(), F); appendConsole('Jog X+', true); });
+  document.getElementById('jog-x-minus')?.addEventListener('click', () => { serialMachine?.jog('X', -getStep(), F); appendConsole('Jog X-', true); });
+  document.getElementById('jog-y-plus')?.addEventListener('click', () => { serialMachine?.jog('Y', getStep(), F); appendConsole('Jog Y+', true); });
+  document.getElementById('jog-y-minus')?.addEventListener('click', () => { serialMachine?.jog('Y', -getStep(), F); appendConsole('Jog Y-', true); });
+  document.getElementById('jog-z-plus')?.addEventListener('click', () => { serialMachine?.jog('Z', getStep(), F); appendConsole('Jog Z+', true); });
+  document.getElementById('jog-z-minus')?.addEventListener('click', () => { serialMachine?.jog('Z', -getStep(), F); appendConsole('Jog Z-', true); });
+  document.getElementById('jog-home')?.addEventListener('click', () => { serialMachine?.sendCode('G28'); appendConsole('Home All (G28)', true); });
+
+  // Custom Command
+  if (btnSendCmd && cmdInput) {
+    const send = () => {
+      const val = cmdInput.value.trim();
+      if (val && serialMachine?.isConnected()) {
+        serialMachine.sendCode(val);
+        appendConsole(val, true);
+        cmdInput.value = '';
+      }
+    };
+    btnSendCmd.addEventListener('click', send);
+    cmdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') send();
+    });
+  }
+
+
+  // ── Smart Nesting UI Toggle & Logic ──────────────────────────────
+  const btnToggleNesting = document.getElementById('btn-toggle-nesting');
+  const btnCloseNesting = document.getElementById('btn-close-nesting');
+  const nestingModal = document.getElementById('nesting-control-panel');
+  const btnExecuteNesting = document.getElementById('btn-execute-nesting');
+
+  if (btnToggleNesting && nestingModal) {
+    btnToggleNesting.addEventListener('click', (e) => {
+      e.stopPropagation();
+      nestingModal.style.display = nestingModal.style.display === 'none' ? 'flex' : 'none';
+      const m = document.getElementById('machine-control-panel');
+      if(m) m.style.display = 'none';
+    });
+  }
+  if (btnCloseNesting && nestingModal) {
+    btnCloseNesting.addEventListener('click', () => {
+      nestingModal.style.display = 'none';
+    });
+  }
+
+  if (btnExecuteNesting) {
+    btnExecuteNesting.addEventListener('click', async () => {
+      const w = parseFloat((document.getElementById('prop-nest-width') as HTMLInputElement)?.value || '600');
+      const h = parseFloat((document.getElementById('prop-nest-height') as HTMLInputElement)?.value || '400');
+      const m = parseFloat((document.getElementById('prop-nest-margin') as HTMLInputElement)?.value || '2');
+      const rot = (document.getElementById('prop-nest-rotation') as HTMLInputElement)?.checked;
+      const exact = (document.getElementById('prop-nest-exact') as HTMLInputElement)?.checked;
+
+      if (typeof showToast !== 'undefined') showToast('Optimizing part nesting...');
+      await editor?.applyNesting({
+        sheetWidth: w,
+        sheetHeight: h,
+        margin: m,
+        allowRotation: rot,
+        exactShape: exact,
+        resolution: 5
+      });
+      if (typeof showToast !== 'undefined') showToast('Nesting complete!');
+      
+      if (nestingModal) nestingModal.style.display = 'none';
+    });
+  }
+
+  // ── 3D View Toggle & Materials ───────────────────────────────────
+  const btn2D = document.getElementById('btn-view-2d');
+  const btn3D = document.getElementById('btn-view-3d');
+  const view2D = document.getElementById('ruler-canvas-wrap');
+  const view3D = document.getElementById('webgl-viewport');
+  const materialBtns = document.querySelectorAll('.material-btn');
+  const thicknessInput = document.getElementById('prop-3d-thickness') as HTMLInputElement;
+
+  let currentMaterial: 'wood' | 'acrylic' = 'wood';
+
+  const update3D = () => {
+    if (view3D && view3D.style.display === 'block') {
+      const thickness = thicknessInput ? parseFloat(thicknessInput.value) : 3.0;
+      if (editor && typeof editor.generate3DAssembly === 'function') {
+        editor.generate3DAssembly('webgl-viewport', thickness, currentMaterial);
+      }
+    }
+  };
+
+  if (btn2D && btn3D && view2D && view3D) {
+    btn2D.addEventListener('click', () => {
+      btn2D.style.background = 'var(--accent-dim)';
+      btn2D.style.color = 'var(--accent)';
+      btn2D.style.cursor = 'default';
+      
+      btn3D.style.background = 'transparent';
+      btn3D.style.color = 'var(--text-secondary)';
+      btn3D.style.cursor = 'pointer';
+
+      view2D.style.display = 'block';
+      view3D.style.display = 'none';
+      
+      // Clean up WebGL canvas when hiding
+      const existingCanvas = view3D.querySelector('canvas');
+      if (existingCanvas) existingCanvas.remove();
+    });
+
+    btn3D.addEventListener('click', () => {
+      btn3D.style.background = 'var(--accent-dim)';
+      btn3D.style.color = 'var(--accent)';
+      btn3D.style.cursor = 'default';
+
+      btn2D.style.background = 'transparent';
+      btn2D.style.color = 'var(--text-secondary)';
+      btn2D.style.cursor = 'pointer';
+
+      view2D.style.display = 'none';
+      view3D.style.display = 'block';
+      
+      update3D();
+    });
+  }
+
+  materialBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      materialBtns.forEach(b => {
+        (b as HTMLElement).style.borderColor = 'transparent';
+        (b as HTMLElement).style.color = 'var(--text-primary)';
+        (b as HTMLElement).style.background = 'var(--bg-tertiary)';
+        b.classList.remove('active');
+      });
+      const target = e.currentTarget as HTMLElement;
+      target.style.borderColor = 'var(--accent)';
+      target.style.color = 'var(--accent)';
+      target.style.background = 'var(--accent-glow)';
+      target.classList.add('active');
+      
+      currentMaterial = target.getAttribute('data-material') as 'wood' | 'acrylic';
+      update3D();
+    });
+  });
+
+  if (thicknessInput) {
+    thicknessInput.addEventListener('change', update3D);
+  }
+
+  // ── AI Copilot (WebGPU) UI Logic ─────────────────────────────────
+  const aiToggle = document.getElementById('prop-ai-enable') as HTMLInputElement;
+  const aiDownloadContainer = document.getElementById('ai-download-container');
+  const aiProgressBar = document.getElementById('ai-progress-bar');
+  const aiProgressText = document.getElementById('ai-progress-text');
+  const aiStatusText = document.getElementById('ai-status-text');
+  const aiPromptContainer = document.getElementById('ai-prompt-container');
+  const aiPromptInput = document.getElementById('ai-prompt-input') as HTMLInputElement;
+  const btnAiSubmit = document.getElementById('btn-ai-submit');
+  const aiSparkle = document.getElementById('ai-sparkle-icon');
+
+  if (aiToggle) {
+    aiToggle.addEventListener('change', async (e) => {
+      const isEnabled = (e.target as HTMLInputElement).checked;
+      
+      if (isEnabled) {
+        if (aiDownloadContainer) aiDownloadContainer.style.display = 'flex';
+        if (aiStatusText) aiStatusText.textContent = 'Initializing WebLLM Engine...';
+        if (aiProgressBar) aiProgressBar.style.width = '0%';
+        if (aiProgressText) aiProgressText.textContent = '0%';
+        
+        if (editor?.aiEngine) {
+           await editor.aiEngine.loadModel((progress: number, text: string) => {
+             if (aiProgressBar) aiProgressBar.style.width = `${progress * 100}%`;
+             if (aiProgressText) aiProgressText.textContent = `${Math.round(progress * 100)}%`;
+             if (aiStatusText) aiStatusText.textContent = text;
+             
+             if (progress >= 1) {
+                if (aiStatusText) aiStatusText.textContent = 'Model Loaded & Active';
+                if (aiPromptContainer) aiPromptContainer.style.display = 'flex';
+             }
+           });
+        }
+      } else {
+        if (aiDownloadContainer) aiDownloadContainer.style.display = 'none';
+        if (aiPromptContainer) aiPromptContainer.style.display = 'none';
+      }
+    });
+  }
+
+  if (btnAiSubmit && aiPromptInput) {
+    const runInference = async () => {
+      const prompt = aiPromptInput.value.trim();
+      if (!prompt) return;
+      
+      // UI Indication
+      aiPromptContainer?.classList.add('ai-processing');
+      aiPromptInput.disabled = true;
+      if (aiSparkle) aiSparkle.style.stroke = 'var(--accent)';
+      
+      if (editor?.aiEngine) {
+         try {
+           await editor.aiEngine.executePrompt(prompt);
+         } catch (e) {
+           console.error("AI Error:", e);
+           if (typeof showToast !== 'undefined') showToast('AI Execution Failed: ' + e);
+         }
+      }
+      
+      // Reset UI
+      aiPromptContainer?.classList.remove('ai-processing');
+      aiPromptInput.disabled = false;
+      aiPromptInput.value = '';
+      if (aiSparkle) aiSparkle.style.stroke = 'var(--text-secondary)';
+      aiPromptInput.focus();
+    };
+
+    btnAiSubmit.addEventListener('click', runInference);
+    aiPromptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runInference();
+    });
+    
+    // Highlight submit button when typed
+    aiPromptInput.addEventListener('input', () => {
+      if (aiPromptInput.value.trim().length > 0) {
+        btnAiSubmit.style.background = 'var(--accent)';
+        btnAiSubmit.style.color = '#000';
+      } else {
+        btnAiSubmit.style.background = 'var(--bg-tertiary)';
+        btnAiSubmit.style.color = 'var(--text-primary)';
+      }
+    });
+  }
