@@ -448,6 +448,7 @@ body::before {
   box-shadow: var(--shadow-lg), var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  transform: translateZ(0);
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
