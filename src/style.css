@@ -558,6 +558,13 @@ body::before {
   border-right: none;
 }
 
+.editor-layout.right-collapsed .properties-panel {
+  border: none !important;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .editor-layout.right-collapsed .right-drawer {
   border-top-left-radius: var(--radius-lg);
   border-bottom-left-radius: var(--radius-lg);
