@@ -664,15 +664,9 @@
           <!-- ── Right Properties Panel ────────────────────────── -->
           <aside id="properties-panel" class="properties-panel glass">
             <div class="properties-header panel-header">
-              <div class="panel-tabs">
-                <button class="tab-btn active" id="tab-properties" data-target="properties-content">Properties</button>
-                <button class="tab-btn" id="tab-layers" data-target="layers-content">Layers</button>
-              </div>
-              <button id="btn-prop-collapse" class="btn-icon" title="Toggle Properties Panel">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="13 17 18 12 13 7"></polyline><line x1="6" y1="17" x2="11" y2="12"></line><line x1="6" y1="7" x2="11" y2="12"></line></svg>
-              </button>
+              <span id="properties-panel-title">Properties</span>
             </div>
-            
+
 <div class="panel-content" id="properties-content">
   
 
@@ -1067,6 +1061,16 @@
               </div>
             </div>
           </aside>
+          <!-- ── Right Drawer ──────────────────────────────────── -->
+          <nav class="right-drawer glass" id="right-drawer">
+            <button id="btn-prop-collapse" class="btn-icon" title="Toggle Properties Panel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="13 17 18 12 13 7"></polyline><line x1="6" y1="17" x2="11" y2="12"></line><line x1="6" y1="7" x2="11" y2="12"></line></svg>
+            </button>
+            <div class="drawer-tabs panel-tabs">
+              <button class="tab-btn active" id="tab-properties" data-target="properties-content">Properties</button>
+              <button class="tab-btn" id="tab-layers" data-target="layers-content">Layers</button>
+            </div>
+          </nav>
         </div>
 
       </section>

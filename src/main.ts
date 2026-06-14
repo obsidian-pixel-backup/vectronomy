@@ -1474,9 +1474,19 @@ tabBtns.forEach(btn => {
     const targetId = btn.getAttribute('data-target');
     if (!targetId) return;
 
+    const isCollapsed = editorLayout?.classList.contains('right-collapsed');
+    const isActive = btn.classList.contains('active');
+
+    // If already active and expanded, collapse it
+    if (isActive && !isCollapsed) {
+      editorLayout?.classList.add('right-collapsed');
+      setTimeout(() => window.dispatchEvent(new Event('resize')), 310);
+      return;
+    }
+
     // If panel is collapsed, expand it
-    if (editorLayout?.classList.contains('right-collapsed')) {
-      editorLayout.classList.remove('right-collapsed');
+    if (isCollapsed) {
+      editorLayout?.classList.remove('right-collapsed');
       setTimeout(() => window.dispatchEvent(new Event('resize')), 310);
     }
 
@@ -1495,6 +1505,12 @@ tabBtns.forEach(btn => {
           (c as HTMLElement).style.display = 'none';
         }
       });
+      
+      // Update the panel title
+      const titleEl = document.getElementById('properties-panel-title');
+      if (titleEl) {
+        titleEl.textContent = btn.textContent;
+      }
     }
   });
 });
