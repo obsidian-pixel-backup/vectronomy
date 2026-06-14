@@ -2065,10 +2065,13 @@ html[data-theme="light"] #app-header {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
   background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
   z-index: 9998;
-  /* Optional: add transition for fade in/out if desired */
+  opacity: 1;
+  transition: opacity 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 }
 .modal-overlay[hidden] {
-  display: none !important;
+  display: block !important;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .modal {
@@ -2100,11 +2103,6 @@ html[data-theme="light"] #app-header {
   overflow-y: auto;
 }
 
-.modal-overlay[hidden] {
-  display: block !important;
-  opacity: 0;
-  pointer-events: none;
-}
 
 .app-sidebar {
   position: fixed;
@@ -2113,10 +2111,10 @@ html[data-theme="light"] #app-header {
   left: 0;
   width: 300px;
   max-width: 85vw;
-  background: var(--glass-bg);
+  background: var(--glass-bg) !important;
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  border-right: none;
+  border: none !important;
   z-index: 10000;
   display: flex;
   flex-direction: column;
@@ -3027,7 +3025,6 @@ html[data-theme="light"] #grid-minor-spacing {
 .modal-container,
 .glass-modal,
 .roadmap-modal-content,
-.app-sidebar,
 .help-panel {
   background: var(--glass-bg-strong) !important;
   border: 1px solid var(--glass-border) !important;
