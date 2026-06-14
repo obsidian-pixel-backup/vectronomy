@@ -65,6 +65,8 @@ body {
   line-height:1.5;
   min-height:100vh;
   overflow-x:hidden;
+  user-select:none;
+  -webkit-user-select:none;
 }
 
 body::before {

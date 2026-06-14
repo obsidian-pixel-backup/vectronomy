@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Vectronomy | The Future of 2D CAD</title>
+  <meta name="description" content="Vectronomy is a complete 140-feature open-source CAD and vector engine that runs entirely in your browser. Explore the full engineering roadmap, feature documentation, and development phases." />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/landing.css" />
 </head>
@@ -14,6 +15,7 @@
       <div class="brand">Vectronomy</div>
       <div class="nav-links">
         <a href="#features">Features</a>
+        <a href="#roadmap">Roadmap</a>
         <a href="/app.html" class="btn primary">Launch Editor</a>
       </div>
     </nav>
@@ -22,9 +24,10 @@
     <header class="hero">
       <div class="hero-content">
         <h1>Industrial Precision.<br><span class="cyan-text">Infinite Portability.</span></h1>
-        <p>A complete 100-feature open-source CAD and vector engine that runs entirely in your browser. From CNC milling to typography, design anywhere.</p>
+        <p>A complete 140-feature open-source CAD and vector engine that runs entirely in your browser. From CNC milling to typography, design anywhere.</p>
         <div class="hero-actions">
           <a href="/app.html" class="btn primary large">Start Designing</a>
+          <a href="#roadmap" class="btn secondary large">Explore Roadmap</a>
         </div>
       </div>
       <div class="hero-image-wrapper">
@@ -54,12 +57,103 @@
         <div class="feature-card">
           <div class="icon">☁️</div>
           <h3>Zero Installation</h3>
-          <p>No heavy downloads. The entire 100-feature engine loads in milliseconds.</p>
+          <p>No heavy downloads. The entire 140-feature engine loads in milliseconds.</p>
         </div>
       </div>
     </section>
 
+    <!-- Roadmap & Features Blog Section -->
+    <section id="roadmap" class="roadmap-section">
+      <div class="roadmap-header">
+        <div class="roadmap-title-group">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="roadmap-icon">
+            <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+            <line x1="9" y1="3" x2="9" y2="18"/>
+            <line x1="15" y1="6" x2="15" y2="21"/>
+          </svg>
+          <div>
+            <h2>Engineering Roadmap</h2>
+            <p class="roadmap-subtitle">Browse every feature across 14 technical divisions and 7 development phases.</p>
+          </div>
+        </div>
+        <div id="roadmap-stats" class="roadmap-stats-bar"></div>
+      </div>
 
+      <div class="roadmap-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="search-icon">
+          <circle cx="11" cy="11" r="8"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input type="text" id="roadmap-search" placeholder="Search features by keyword (e.g. G-code, WebGPU, Three.js)..." />
+      </div>
+
+      <div class="roadmap-tabs">
+        <button id="tab-roadmap-divisions" class="roadmap-tab active">14 TECHNICAL DIVISIONS</button>
+        <button id="tab-roadmap-phases" class="roadmap-tab">7 DEVELOPMENT PHASES</button>
+      </div>
+
+      <div class="roadmap-content">
+        <!-- Divisions view -->
+        <div id="view-roadmap-divisions" class="roadmap-view">
+          <aside class="roadmap-divisions-sidebar" id="roadmap-divisions-sidebar">
+            <!-- Dynamically populated -->
+          </aside>
+          <main class="roadmap-features-display" id="roadmap-features-display">
+            <!-- Dynamically populated -->
+          </main>
+        </div>
+
+        <!-- Phases view -->
+        <div id="view-roadmap-phases" class="roadmap-view" style="display: none;">
+          <div class="roadmap-phases-timeline" id="roadmap-phases-timeline">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature Documentation Modal -->
+    <div id="roadmap-feature-modal" class="roadmap-modal" style="display: none;">
+      <div class="roadmap-modal-overlay"></div>
+      <div class="roadmap-modal-content glass">
+        <header class="roadmap-modal-header">
+          <div class="roadmap-modal-title-group">
+            <span id="modal-feature-num" class="feature-card-num">#1</span>
+            <h3 id="modal-feature-title">Feature Title</h3>
+          </div>
+          <button id="modal-close-btn" class="modal-close-btn">&times;</button>
+        </header>
+        <div class="roadmap-modal-body">
+          <div class="roadmap-modal-badge-row">
+            <span id="modal-feature-status" class="status-badge">Complete</span>
+            <span id="modal-feature-div" class="div-badge">Division 1</span>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <h4>DOCUMENTATION OVERVIEW</h4>
+            <p id="modal-feature-readme">Detailed documentation goes here...</p>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <h4>USER WORKFLOW & ACTIVATION</h4>
+            <p id="modal-feature-usage">Instructions on how to activate and use this feature...</p>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+              <h4 style="margin: 0;">TECHNICAL ARCHITECTURE</h4>
+              <button id="btn-copy-spec" class="btn-copy-spec">Copy Spec</button>
+            </div>
+            <pre><code id="modal-feature-tech">Technical specifications and code pathways...</code></pre>
+          </div>
+
+          <div class="roadmap-modal-section">
+            <h4>COMMERCIAL & INDUSTRIAL METRICS</h4>
+            <p id="modal-feature-value">Commercial market value insights...</p>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <footer class="footer">
       <div class="footer-content">
