@@ -29,7 +29,14 @@
   --border-strong:rgba(255,255,255,0.12);
   --border-accent:rgba(0,255,194,0.3);
   --glass-border: rgba(255,255,255,0.1);
-  --glass-bg:     rgba(0,0,0,0.5);
+  --glass-bg:     rgba(12,12,22,0.62);
+  --glass-bg-strong: rgba(12,12,22,0.78);
+  --glass-bg-soft: rgba(255,255,255,0.045);
+  --glass-highlight: rgba(255,255,255,0.08);
+  --glass-accent-line: rgba(0,255,194,0.16);
+  --glass-blur: 24px;
+  --glass-saturate: 145%;
+  --glass-shadow: 0 18px 48px rgba(0,0,0,.52), inset 0 1px 0 rgba(255,255,255,.06);
 
   --radius-sm:4px; --radius-md:8px; --radius-lg:14px; --radius-xl:20px;
 
@@ -256,10 +263,13 @@ body::before {
 
 /* ── Glass Panel ─────────────────────────────────────────────── */
 .glass {
-  background:var(--glass-bg);
-  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  background:
+    linear-gradient(135deg, var(--glass-highlight), transparent 42%),
+    var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border:1px solid var(--glass-border); border-radius:var(--radius-lg);
-  box-shadow:var(--shadow-lg);
+  box-shadow:var(--glass-shadow);
 }
 
 /* ── Tools Panel ─────────────────────────────────────────────── */
@@ -1986,6 +1996,13 @@ html[data-theme="light"] {
   --border-accent:rgba(0,153,117,0.25);
   --glass-border: rgba(0,0,0,0.15);
   --glass-bg:     rgba(255,255,255,0.85);
+  --glass-bg-strong: rgba(255,255,255,0.92);
+  --glass-bg-soft: rgba(0,0,0,0.035);
+  --glass-highlight: rgba(255,255,255,0.72);
+  --glass-accent-line: rgba(0,153,117,0.14);
+  --glass-blur: 22px;
+  --glass-saturate: 135%;
+  --glass-shadow: 0 18px 44px rgba(20,20,30,.16), inset 0 1px 0 rgba(255,255,255,.65);
   
   --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
   --shadow-md: 0 4px 14px rgba(0,0,0,.12);
@@ -2925,13 +2942,171 @@ html[data-theme="light"] #grid-minor-spacing {
   transform: rotate(-90deg);
 }
 
+/* ── Glassmorphism Consistency Layer ─────────────────────────── */
+#app-header,
+.glass,
+.glass-modal,
+.modal-container,
+.pricing-card,
+.drop-zone,
+.svg-preview,
+.tools-panel,
+.properties-panel,
+.landing-projects,
+.help-sidebar,
+.help-content-area,
+.app-sidebar,
+.preview-controls,
+.layer-tabs,
+.shapes-popover-menu,
+.export-dropdown-menu,
+.import-dropdown-menu,
+.grid-settings-menu,
+.context-menu,
+.tour-tooltip,
+.tour-prompt-dialog,
+.roadmap-page-header,
+.roadmap-page-tabs,
+.roadmap-stats-header,
+.roadmap-quick-filters,
+.roadmap-divisions-sidebar,
+.division-intro-card,
+.feature-card,
+.phase-details-card,
+.help-panel,
+.help-card,
+.help-tour-section,
+.shortcut-item,
+.project-card,
+.isolation-breadcrumb,
+.editor-status-bar {
+  background:
+    linear-gradient(135deg, var(--glass-highlight), transparent 44%),
+    var(--glass-bg) !important;
+  border-color: var(--glass-border) !important;
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+.modal-container,
+.glass-modal,
+.roadmap-modal-content,
+.app-sidebar,
+.help-panel {
+  background:
+    linear-gradient(135deg, var(--glass-highlight), transparent 38%),
+    var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow:
+    0 24px 70px rgba(0,0,0,.58),
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 0 0 1px var(--glass-accent-line);
+}
+
+.modal-overlay,
+.roadmap-modal-overlay,
+.tour-prompt-backdrop {
+  background: rgba(4,4,8,.56) !important;
+  backdrop-filter: blur(12px) saturate(125%);
+  -webkit-backdrop-filter: blur(12px) saturate(125%);
+}
+
+.modal-header,
+.sidebar-header,
+.help-panel-header,
+.roadmap-modal-header,
+.help-header,
+.panel-header,
+.feature-card-header {
+  background: var(--glass-bg-soft);
+  border-color: var(--glass-border) !important;
+}
+
+.modal-content,
+.sidebar-content,
+.help-panel-content,
+.roadmap-modal-body,
+.panel-content,
+.help-scroll-container {
+  background: transparent;
+}
+
+.shapes-popover-menu,
+.export-dropdown-menu,
+.import-dropdown-menu,
+.grid-settings-menu,
+.context-menu {
+  background:
+    linear-gradient(135deg, var(--glass-highlight), transparent 36%),
+    var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow:
+    0 18px 48px rgba(0,0,0,.6),
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 0 0 1px var(--glass-accent-line);
+}
+
+.division-intro-card,
+.feature-card,
+.phase-details-card,
+.help-card,
+.shortcut-item,
+.project-card,
+.pricing-card {
+  background:
+    linear-gradient(135deg, var(--glass-highlight), transparent 48%),
+    var(--glass-bg) !important;
+}
+
+.feature-card:hover,
+.project-card:hover,
+.phase-node.active .phase-details-card,
+.pricing-card.featured {
+  border-color: var(--border-accent) !important;
+  box-shadow:
+    var(--glass-shadow),
+    0 0 0 1px var(--glass-accent-line),
+    0 0 24px rgba(0,255,194,.08);
+}
+
+.pricing-card.premium {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.11), transparent 40%),
+    linear-gradient(155deg, rgba(0,255,194,.08), transparent 62%),
+    var(--glass-bg-strong) !important;
+}
+
+.input-field,
+.prop-select,
+.prop-input,
+.auth-input,
+#roadmap-search,
+#grid-major-spacing,
+#grid-minor-spacing,
+.phase-goal,
+.roadmap-modal-section pre {
+  background: var(--glass-bg-soft) !important;
+  border-color: var(--glass-border) !important;
+}
+
+html[data-theme="light"] .modal-overlay,
+html[data-theme="light"] .roadmap-modal-overlay,
+html[data-theme="light"] .tour-prompt-backdrop {
+  background: rgba(245,247,250,.58) !important;
+}
+
 /* ── Status Bar ──────────────────────────────────────────────── */
 .editor-status-bar {
   display: flex; align-items: center; gap: 16px;
   padding: 4px 14px;
-  background: rgba(9, 9, 15, 0.9);
-  backdrop-filter: blur(8px);
-  border-top: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, var(--glass-highlight), transparent 44%),
+    var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-top: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
   font-size: 0.68rem;
   font-family: var(--font-mono);
   color: var(--text-muted);
