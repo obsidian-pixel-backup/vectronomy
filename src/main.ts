@@ -26,10 +26,7 @@ import { GridManager } from './managers/GridManager';
 import { ToolbarManager } from './managers/ToolbarManager';
 import { LayerManager } from './engine/layerManager';
 import { PrecisionEngine } from './engine/precision';
-import { initModals, showPricingModal, isPremiumUser } from './auth/modals';
-
 const toolbarManager = new ToolbarManager();
-initModals();
 
 // ── DOM ─────────────────────────────────────────────────────────
 
@@ -915,10 +912,6 @@ function initEditor() {
   const btnGenerateToolpath = document.getElementById('btn-generate-toolpath');
   if (btnGenerateToolpath) {
     btnGenerateToolpath.addEventListener('click', () => {
-      if (!isPremiumUser()) {
-        showPricingModal();
-        return;
-      }
       const kerfInput = document.getElementById('prop-kerf-width') as HTMLInputElement;
       const kerf = kerfInput ? parseFloat(kerfInput.value) : 0;
       if (kerf !== 0) {
@@ -1505,12 +1498,6 @@ tabBtns.forEach(btn => {
           (c as HTMLElement).style.display = 'none';
         }
       });
-      
-      // Update the panel title
-      const titleEl = document.getElementById('properties-panel-title');
-      if (titleEl) {
-        titleEl.textContent = btn.textContent;
-      }
     }
   });
 });

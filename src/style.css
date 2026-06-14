@@ -251,7 +251,7 @@ body::before {
 .editor-layout {
   flex:1; display:grid;
   grid-template-columns: 50px 1fr 272px 50px;
-  gap:16px; min-height:0;
+  min-height:0;
   transition: grid-template-columns 0.3s cubic-bezier(0.19, 1, 0.22, 1);
 }
 
@@ -259,7 +259,7 @@ body::before {
   grid-template-columns: 50px 1fr 0px 50px;
 }
 
-.editor-center { display:flex; flex-direction:column; gap:10px; min-width:0; min-height:0; }
+.editor-center { display:flex; flex-direction:column; gap:10px; min-width:0; min-height:0; margin: 0 16px; }
 
 /* ── Glass Panel ─────────────────────────────────────────────── */
 .glass {
@@ -547,6 +547,20 @@ body::before {
   padding: 8px 0;
   gap: 16px;
   overflow: hidden;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  transition: border-radius 0.3s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.properties-panel {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  border-right: none;
+}
+
+.editor-layout.right-collapsed .right-drawer {
+  border-top-left-radius: var(--radius-lg);
+  border-bottom-left-radius: var(--radius-lg);
 }
 
 .right-drawer .drawer-tabs {
