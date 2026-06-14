@@ -263,9 +263,7 @@ body::before {
 
 /* ── Glass Panel ─────────────────────────────────────────────── */
 .glass {
-  background:
-    linear-gradient(135deg, var(--glass-highlight), transparent 42%),
-    var(--glass-bg);
+  background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border:1px solid var(--glass-border); border-radius:var(--radius-lg);
@@ -2778,9 +2776,12 @@ html[data-theme="light"] #grid-minor-spacing {
 }
 
 .panel-tabs { display: flex; width: 100%; align-items: center; justify-content: flex-start; }
-.tab-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 10px; cursor: pointer; transition: color var(--transition-fast); white-space: nowrap; outline: none; border-bottom: 2px solid transparent; }
+.tab-btn { background: transparent; border: none; color: var(--text-muted); font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; padding: 12px 10px; cursor: pointer; transition: color var(--transition-fast); white-space: nowrap; outline: none; }
 .tab-btn:hover { color: var(--text-primary); }
-.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-btn.active { color: var(--accent); }
+
+.editor-layout.right-collapsed .tab-btn.active { color: var(--text-muted); }
+.editor-layout.right-collapsed .tab-btn:hover { color: var(--text-primary); }
 
 /* ═══════════════════════════════════════════════════════════════
    NEW FEATURES — Toast System, Context Menu, History Panel,
@@ -2998,9 +2999,7 @@ html[data-theme="light"] #grid-minor-spacing {
 .project-card,
 .isolation-breadcrumb,
 .editor-status-bar {
-  background:
-    linear-gradient(135deg, var(--glass-highlight), transparent 44%),
-    var(--glass-bg) !important;
+  background: var(--glass-bg) !important;
   border-color: var(--glass-border) !important;
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
@@ -3012,9 +3011,7 @@ html[data-theme="light"] #grid-minor-spacing {
 .roadmap-modal-content,
 .app-sidebar,
 .help-panel {
-  background:
-    linear-gradient(135deg, var(--glass-highlight), transparent 38%),
-    var(--glass-bg-strong) !important;
+  background: var(--glass-bg-strong) !important;
   border: 1px solid var(--glass-border) !important;
   box-shadow:
     0 24px 70px rgba(0,0,0,.58),
@@ -3055,9 +3052,7 @@ html[data-theme="light"] #grid-minor-spacing {
 .import-dropdown-menu,
 .grid-settings-menu,
 .context-menu {
-  background:
-    linear-gradient(135deg, var(--glass-highlight), transparent 36%),
-    var(--glass-bg-strong) !important;
+  background: var(--glass-bg-strong) !important;
   border: 1px solid var(--glass-border) !important;
   box-shadow:
     0 18px 48px rgba(0,0,0,.6),
@@ -3072,9 +3067,7 @@ html[data-theme="light"] #grid-minor-spacing {
 .shortcut-item,
 .project-card,
 .pricing-card {
-  background:
-    linear-gradient(135deg, var(--glass-highlight), transparent 48%),
-    var(--glass-bg) !important;
+  background: var(--glass-bg) !important;
 }
 
 .feature-card:hover,
@@ -3089,10 +3082,7 @@ html[data-theme="light"] #grid-minor-spacing {
 }
 
 .pricing-card.premium {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,.11), transparent 40%),
-    linear-gradient(155deg, rgba(0,255,194,.08), transparent 62%),
-    var(--glass-bg-strong) !important;
+  background: var(--glass-bg-strong) !important;
 }
 
 .input-field,
@@ -3118,9 +3108,7 @@ html[data-theme="light"] .tour-prompt-backdrop {
 .editor-status-bar {
   display: flex; align-items: center; gap: 16px;
   padding: 4px 14px;
-  background:
-    linear-gradient(135deg, var(--glass-highlight), transparent 44%),
-    var(--glass-bg);
+  background: var(--glass-bg);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   border-top: 1px solid var(--glass-border);
