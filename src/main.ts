@@ -222,12 +222,12 @@ previewContainer.addEventListener('drop', (e) => {
       processSvgImport(file, canvasPt);
     } else if (nameLower.endsWith('.png') || nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg')) {
       processImageFile(file, canvasPt);
+    } else if (nameLower.endsWith('.xcs') || nameLower.endsWith('.zip') || nameLower.endsWith('.json')) {
+      processXcsImport(file, canvasPt);
     } else {
       if (confirm(`Do you want to open ${file.name} as a new design project? This will discard your current unsaved edits.`)) {
         if (nameLower.endsWith('.vectronomy')) {
           processVectronomyProject(file);
-        } else if (nameLower.endsWith('.xcs') || nameLower.endsWith('.zip') || nameLower.endsWith('.json')) {
-          processXcsFile(file);
         } else {
           processSvgFile(file);
         }
@@ -531,6 +531,99 @@ async function processSvgImport(file: File, dropCoords: DOMPoint) {
     }
   } catch (e) {
     showToast('Failed to import vector elements from SVG.', true);
+  }
+}
+
+async function processXcsImport(file: File, dropCoords: DOMPoint) {
+  try {
+    const options: ConversionOptions = {
+      heal: true, includeMetadata: true,
+      usePhysicalUnits: true, viewBoxPadding: 10,
+    };
+    const layers = await XcsConverter.convertFile(file, options);
+    if (!layers.length) throw new Error('No vector layers found in the file.');
+    
+    const mainSvg = previewContainer.querySelector('svg');
+    if (!mainSvg) return;
+    const viewport = mainSvg.querySelector('#viewport') || mainSvg;
+    
+    const tempGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    tempGroup.setAttribute('id', `imported-xcs-${Date.now()}`);
+    
+    const importedNodes: Element[] = [];
+    const parser = new DOMParser();
+    
+    for (const layer of layers) {
+      if (!layer.svg) continue;
+      const doc = parser.parseFromString(layer.svg, 'image/svg+xml');
+      const svgEl = doc.querySelector('svg');
+      if (!svgEl) continue;
+      
+      const srcViewport = svgEl.querySelector('#viewport') || svgEl;
+      while (srcViewport.firstChild) {
+        const child = srcViewport.firstChild;
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const el = child as Element;
+          if (!el.hasAttribute('data-xcs-id')) {
+            el.setAttribute('data-xcs-id', `el-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`);
+          }
+          tempGroup.appendChild(child);
+          importedNodes.push(el);
+        } else {
+          srcViewport.removeChild(child);
+        }
+      }
+    }
+    
+    viewport.appendChild(tempGroup);
+    
+    let bbox = { x: 0, y: 0, width: 200, height: 200 };
+    try {
+      const measured = (tempGroup as any).getBBox();
+      if (measured.width > 0 && measured.height > 0) {
+        bbox = measured;
+      }
+    } catch (e) {}
+    
+    const dx = dropCoords.x - (bbox.x + bbox.width / 2);
+    const dy = dropCoords.y - (bbox.y + bbox.height / 2);
+    
+    const finalElements: Element[] = [];
+    while (tempGroup.firstChild) {
+      const child = tempGroup.firstChild as SVGGraphicsElement;
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const origTransform = child.getAttribute('transform') || '';
+        child.setAttribute('transform', `translate(${dx}, ${dy}) ${origTransform}`.trim());
+        viewport.appendChild(child);
+        finalElements.push(child);
+      } else {
+        tempGroup.removeChild(child);
+      }
+    }
+    tempGroup.remove();
+    
+    const newSvg = mainSvg.outerHTML;
+    const activeLayer = convertedLayers[activeLayerIndex];
+    if (activeLayer) {
+      activeLayer.svg = newSvg;
+      activeLayer.elementCount += finalElements.length;
+    }
+    pushUndo(newSvg);
+    
+    if (editor) {
+      if (activeLayer) editor.setLayer(activeLayer);
+      editor.loadFromSvg(newSvg);
+      editor.selectedIds = new Set(finalElements.map(el => el.getAttribute('data-xcs-id')!));
+      if (finalElements.length === 1) {
+        editor.selectedId = finalElements[0].getAttribute('data-xcs-id');
+      }
+      editor.renderSelectionUI();
+    }
+    
+    showToast(`Imported vector elements from ${file.name}!`);
+  } catch (err: any) {
+    showToast(`Error importing XCS: ${err.message}`, true);
+    console.error(err);
   }
 }
 
